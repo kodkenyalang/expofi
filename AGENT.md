@@ -263,6 +263,8 @@ The allotment member is a guest. Anticipate the need before it is spoken.
 
 Small, continuous, measured improvements, all the time. One improvement per commit, with a before/after number when there is one (build time, warning count, CU used, taps to borrow). Every retro yields at least one change to this file or to `docs/`.
 
+The 30-day plan, target conditions, and the kaizen newspaper (action log) live in [KAIZEN.md](KAIZEN.md). Ask the five coaching questions at the start of each session and log every improvement there.
+
 ---
 
 ## Part 3: Hard rules

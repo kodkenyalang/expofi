@@ -33,6 +33,7 @@ See [docs/GENCHI_GENBUTSU.md](docs/GENCHI_GENBUTSU.md) for the first-hand audit 
 | [docs/ROADMAP.md](docs/ROADMAP.md)                 | Four-week plan against the hackathon checkpoints                     |
 | [docs/GENCHI_GENBUTSU.md](docs/GENCHI_GENBUTSU.md) | What we actually found when we went and looked (18 Oct 2026)         |
 | [AGENT.md](AGENT.md)                               | Rules for AI agents and humans: Solana skills and working principles |
+| [KAIZEN.md](KAIZEN.md)                             | 30-day improvement plan, target conditions, kaizen newspaper         |
 | [anchor/README.md](anchor/README.md)               | Program build, test, and deploy                                      |
 
 ## Prerequisites
