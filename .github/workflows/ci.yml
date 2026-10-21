@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    name: Web (build, lint, format)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      # npm ci fails if package-lock.json drifts from package.json (K1, K8)
+      - run: npm ci
+      - run: npm run ci
+
+  program:
+    name: Program (build-sbf, LiteSVM tests)
+    runs-on: ubuntu-latest
+    env:
+      SOLANA_VERSION: 3.1.14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: anchor
+      - name: Cache Solana CLI and platform tools
+        id: solana-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.local/share/solana
+            ~/.cache/solana
+          key: solana-${{ env.SOLANA_VERSION }}
+      - name: Install Solana CLI
+        if: steps.solana-cache.outputs.cache-hit != 'true'
+        run: sh -c "$(curl -sSfL https://release.anza.xyz/v${SOLANA_VERSION}/install)"
+      - run: echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
+      # Template vault is not rustfmt-clean; it is deleted in Cycle 2 (KAIZEN.md)
+      - name: rustfmt (seed_library)
+        working-directory: anchor
+        run: cargo fmt -p seed_library -- --check
+      # build-sbf instead of `anchor build`: no Anchor CLI needed, and no
+      # chance of keys being rewritten (K3)
+      - name: Build programs
+        working-directory: anchor
+        run: cargo build-sbf
+      - name: LiteSVM tests
+        working-directory: anchor
+        run: cargo test

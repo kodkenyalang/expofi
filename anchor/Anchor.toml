@@ -1,10 +1,13 @@
 [toolchain]
+anchor_version = "1.1.2"
+solana_version = "3.1.14"
 
 [features]
 resolution = true
 skip-lint = false
 
 [programs.devnet]
+seed_library = "EqkKhhUF8yBnxHEXT2E8B4sdh36N4E4hHjqVRPbLzZby"
 vault = "F4jZpgbtTb6RWNWq6v35fUeiAsRJMrDczVPv9U23yXjB"
 
 [registry]
