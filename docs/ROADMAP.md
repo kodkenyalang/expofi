@@ -8,17 +8,20 @@ Four-week online hackathon, started Monday 12 October 2026, with three checkpoin
 - [x] Genchi genbutsu audit ([GENCHI_GENBUTSU.md](GENCHI_GENBUTSU.md))
 - [x] Fix interrupted npm install, patch the Next.js critical advisory
 - [x] Docs: README, AGENT.md, CLAUDE.md, PRODUCT, A3, ARCHITECTURE, ROADMAP
-- [ ] **Install Anchor CLI 1.x** (`avm install 1.1.2`), the current constraint
-- [ ] Talk to 5 seed-library or allotment coordinators; write down the happy path and failure path in their words
+- [x] Install Anchor CLI 1.1.2 (done 21 Oct, from source; see GENCHI_GENBUTSU audit 2)
+- [ ] **Talk to 5 seed-library or allotment coordinators; write down the happy path and failure path in their words.** Carried into week 2. This is now the constraint
 - [ ] Decide: borrower-only return vs steward attestation
 
 ## Week 2 (19–25 Oct): Plan gate (devnet flow works)
 
-- [ ] `seed_library` program: `init_library`, `join`, `add_lot`, `borrow`, `return_lot`, `forgive`
-- [ ] LiteSVM tests for every rule in [ARCHITECTURE.md](ARCHITECTURE.md#tests-required-before-any-devnet-deploy), plus chaos cases
-- [ ] Own program keypair, deploy to devnet, regenerate Codama client
-- [ ] Toolchain poka-yoke: script fails if `anchor --version` is not 1.x
-- [ ] CI on GitHub Actions: `npm ci && npm run ci && cargo test`
+- [x] `seed_library` program core: `init_library`, `join`, `add_lot`, `borrow`, `return_lot` (Days 2–3, 21 Oct)
+- [ ] `forgive`, `attest_germination`
+- [x] LiteSVM tests for every rule built so far: 13 tests, exact error codes, mutation-checked ([ARCHITECTURE.md](ARCHITECTURE.md#tests))
+- [ ] Chaos cases on the client side (RPC down, wallet reject, blockhash expiry)
+- [x] Own program keypair (`EqkK…LzZby`)
+- [ ] Deploy to devnet, regenerate Codama client
+- [x] Toolchain poka-yoke: `npm run anchor-check` blocks `anchor-build`/`setup` when the CLI doesn't match `anchor-lang`
+- [x] CI on GitHub Actions: web (`npm ci && npm run ci`) and program (`cargo build-sbf && cargo test`) jobs
 
 ## Week 3 (26 Oct–1 Nov): Availability gate (checkpoint demo)
 

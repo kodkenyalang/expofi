@@ -166,8 +166,9 @@ Cross-functional by default: product, program, client, and video are planned tog
 
 Find the one constraint, **exploit** it, **subordinate** everything else to it, **elevate** it, then repeat.
 
-- Constraint on 18 Oct 2026: **toolchain** (Anchor CLI 0.30.1 vs program 1.x). Elevate: `avm install 1.1.2`.
-- Next likely constraint: **access to real seed librarians**, then **the demo video**. Don't polish UI while the constraint is elsewhere.
+- 18 Oct 2026: **toolchain** (Anchor CLI 0.30.1 vs program 1.x). Elevated 21 Oct: Anchor 1.1.2 installed, guarded, and pinned.
+- **Current constraint (21 Oct): access to real seed librarians** (0 of 5 interviews). The program is ahead of what we know about the buyer. Subordinate: don't build `forgive`, steward approval, or UI flows past what an interview has confirmed.
+- Next likely constraint: **the demo video**. Don't polish UI while the constraint is elsewhere.
 
 ### Poka-Yoke (mistake-proofing)
 
@@ -251,13 +252,13 @@ The allotment member is a guest. Anticipate the need before it is spoken.
 
 ### 5S (applied to the repo)
 
-| S                          | Rule                                                                                             |
-| -------------------------- | ------------------------------------------------------------------------------------------------ |
-| **Seiri** (sort)           | Delete template code (vault, "Anchor Vault" hero) once the seed-library equivalent lands.        |
-| **Seiton** (set in order)  | One instruction per file in `programs/*/src/instructions/`. Docs live in `docs/`.                |
-| **Seiso** (shine)          | Zero lint warnings, zero compiler warnings. 3 + 3 exist today, so pay them down.                 |
-| **Seiketsu** (standardize) | `npm run ci` and `cargo test` are the standard. Prettier formats everything, including Markdown. |
-| **Shitsuke** (sustain)     | Re-run the genchi genbutsu audit each checkpoint. Keep this file current.                        |
+| S                          | Rule                                                                                                                       |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| **Seiri** (sort)           | Delete template code (vault, "Anchor Vault" hero) once the seed-library equivalent lands.                                  |
+| **Seiton** (set in order)  | One instruction per file in `programs/*/src/instructions/`. Docs live in `docs/`.                                          |
+| **Seiso** (shine)          | Zero lint warnings, zero compiler warnings. 3 + 3 exist today, so pay them down.                                           |
+| **Seiketsu** (standardize) | `npm run ci` and `npm run program-test` are the standard, enforced in CI. Prettier formats everything, including Markdown. |
+| **Shitsuke** (sustain)     | Re-run the genchi genbutsu audit each checkpoint. Keep this file current.                                                  |
 
 ### Kaizen (改善)
 
@@ -269,7 +270,7 @@ The 30-day plan, target conditions, and the kaizen newspaper (action log) live i
 
 ## Part 3: Hard rules
 
-1. Run `npm run ci` and `cd anchor && cargo test` before every push. Don't push red.
+1. Run `npm run ci` and `npm run program-test` before every push. CI (`.github/workflows/ci.yml`) runs the same two gates. Don't push red.
 2. Never edit `app/generated/` by hand. Regenerate with `npm run codama:js`.
 3. Never change a program ID by hand, and never commit keypairs, `.env*`, or `anchor/target/`.
 4. Program rules live in the program. The UI only mirrors them.

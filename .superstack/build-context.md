@@ -37,12 +37,41 @@ Phase 2 (Build) handoff, written by `scaffold-project` on 2026-10-18.
   },
   "build_status": {
     "mvp_complete": false,
-    "tests_passing": false,
+    "tests_passing": true,
     "devnet_deployed": false
   },
+  "program": {
+    "name": "seed_library",
+    "id": "EqkKhhUF8yBnxHEXT2E8B4sdh36N4E4hHjqVRPbLzZby",
+    "instructions_built": [
+      "init_library",
+      "join",
+      "add_lot",
+      "borrow",
+      "return_lot"
+    ],
+    "instructions_pending": ["forgive", "attest_germination"],
+    "litesvm_tests": 13
+  },
+  "toolchain": {
+    "anchor_cli": "1.1.2 (avm, built from source; GLIBC 2.35)",
+    "solana_cli": "3.1.14",
+    "pinned_in": "anchor/Anchor.toml [toolchain]",
+    "guard": "npm run anchor-check"
+  },
+  "ci": ".github/workflows/ci.yml (web + program), green on first run 2026-10-21",
   "blockers": [
-    "Anchor CLI 0.30.1 installed; project requires 1.x (avm install 1.1.2)"
+    "0 of 5 seed-library coordinator interviews (the current constraint)"
   ],
+  "verified_2026_10_21": {
+    "npm_run_ci": "pass (0 errors, 3 template lint warnings)",
+    "npm_run_setup": "pass",
+    "npm_run_program_test": "seed_library 13/13, vault 4/4",
+    "seed_library_warnings": 0,
+    "mutation_check": "removing the borrow gate fails its test",
+    "github_actions_run": "39590915650 success",
+    "npm_audit_prod": "0 vulnerabilities"
+  },
   "verified_2026_10_18": {
     "npm_run_build": "pass",
     "eslint": "0 errors, 3 warnings",
@@ -54,6 +83,6 @@ Phase 2 (Build) handoff, written by `scaffold-project` on 2026-10-18.
 }
 ```
 
-`tests_passing` stays `false` until the **seed_library** program's tests pass. The template vault tests passing doesn't count.
+`tests_passing` became `true` on 2026-10-21, when the **seed_library** tests passed locally and in CI. It covers the 5 instructions built so far. `forgive` and `attest_germination` still need tests.
 
 **Next:** `/build-with-claude`.

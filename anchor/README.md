@@ -1,13 +1,34 @@
 # Anchor workspace
 
-This workspace currently contains the template SOL `vault` program from `create-solana-dapp`. The ExpoFi `seed_library` program will be added alongside it, and the vault will be removed once that lands. See [../docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md).
+Two programs:
 
-> **Toolchain:** this workspace needs **Anchor CLI 1.x** (`anchor-lang = "1.1.2"`). On Anchor 0.30.x, `anchor build` silently rewrites `declare_id!` and `Anchor.toml` to a fresh local key, and `npm run setup` fails on `--ignore-keys`. If you can't upgrade yet, build and test without Anchor touching keys:
->
-> ```bash
-> cargo build-sbf --manifest-path programs/vault/Cargo.toml
-> cargo test
-> ```
+| Program        | ID                                             | Status                                                                      |
+| -------------- | ---------------------------------------------- | --------------------------------------------------------------------------- |
+| `seed_library` | `EqkKhhUF8yBnxHEXT2E8B4sdh36N4E4hHjqVRPbLzZby` | ExpoFi. 5 of 7 instructions, 13 LiteSVM tests. Not deployed yet             |
+| `vault`        | `F4jZpgbtTb6RWNWq6v35fUeiAsRJMrDczVPv9U23yXjB` | Template from `create-solana-dapp`. Removed once the new UI lands (Cycle 2) |
+
+Design, accounts, rules, and the test matrix: [../docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md).
+
+## Build and test
+
+From the repo root:
+
+```bash
+npm run program-test   # cargo build-sbf + cargo test for all programs. No Anchor CLI needed
+npm run anchor-build   # anchor build (IDL too). Runs the version guard first
+```
+
+Or by hand:
+
+```bash
+cd anchor
+cargo build-sbf        # builds every program into target/deploy/*.so
+cargo test             # LiteSVM tests load those .so files
+```
+
+> **Toolchain:** this workspace needs **Anchor CLI 1.1.x** (`anchor-lang = "1.1.2"`). On Anchor 0.30.x, `anchor build` silently rewrites `declare_id!` and `Anchor.toml` to a fresh local key. `npm run anchor-check` (run automatically by `anchor-build` and `setup`) stops that from happening.
+
+> **Keypair:** `target/deploy/seed_library-keypair.json` is the `seed_library` program's identity and is **gitignored**. Back it up before you deploy. Lose it and you lose the program ID (before deploy) or upgrade control (after).
 
 ## Template vault program
 
