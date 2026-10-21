@@ -41,6 +41,7 @@ See [KAIZEN.md](KAIZEN.md) for the measured metrics and [docs/GENCHI_GENBUTSU.md
 | [docs/GENCHI_GENBUTSU.md](docs/GENCHI_GENBUTSU.md) | What we actually found when we went and looked (18 and 21 Oct 2026)      |
 | [AGENT.md](AGENT.md)                               | Rules for AI agents and humans: Solana skills and working principles     |
 | [KAIZEN.md](KAIZEN.md)                             | 30-day improvement plan, target conditions, kaizen newspaper             |
+| [CHANGELOG.md](CHANGELOG.md)                       | Every push to `main`, date- and time-stamped                             |
 | [anchor/README.md](anchor/README.md)               | Program build, test, and deploy                                          |
 
 ## Prerequisites
