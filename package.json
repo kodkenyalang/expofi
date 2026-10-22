@@ -22,6 +22,9 @@
   },
   "version": "0.0.0",
   "private": true,
+  "engines": {
+    "node": ">=20.18"
+  },
   "scripts": {
     "anchor-build": "npm run anchor-check && cd anchor && anchor build --ignore-keys",
     "anchor-check": "node scripts/check-anchor-version.mjs",
@@ -33,6 +36,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint",
+    "program-mutants": "python3 -I scripts/mutation-check.py anchor",
     "program-test": "cd anchor && cargo build-sbf && cargo test",
     "setup": "npm run anchor-build && npm run codama:js",
     "start": "next start"

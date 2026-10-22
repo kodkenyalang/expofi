@@ -15,10 +15,10 @@ concurrency:
 jobs:
   web:
     name: Web (build, lint, format)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -28,11 +28,12 @@ jobs:
 
   program:
     name: Program (build-sbf, LiteSVM tests)
-    runs-on: ubuntu-latest
-    env:
-      SOLANA_VERSION: 3.1.14
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+      # Single source of truth for the Solana version: anchor/Anchor.toml [toolchain]
+      - name: Read pinned Solana version
+        run: echo "SOLANA_VERSION=$(grep -oP 'solana_version\s*=\s*"\K[^"]+' anchor/Anchor.toml)" >> "$GITHUB_ENV"
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
@@ -41,7 +42,7 @@ jobs:
           workspaces: anchor
       - name: Cache Solana CLI and platform tools
         id: solana-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.local/share/solana

@@ -18,7 +18,8 @@ pub struct ReturnLot<'info> {
     #[account(
         mut,
         has_one = member @ SeedLibraryError::NotBorrower,
-        has_one = lot,
+        // Lineage integrity: the child's parent must be the lot actually borrowed.
+        has_one = lot @ SeedLibraryError::WrongLot,
         constraint = loan.status == LoanStatus::Open @ SeedLibraryError::LoanNotOpen,
     )]
     pub loan: Account<'info, Loan>,

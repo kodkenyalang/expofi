@@ -82,6 +82,22 @@ mod tests {
         );
     }
 
+    /// For errors raised by Anchor or the runtime rather than SeedLibraryError.
+    fn assert_code(result: TransactionResult, code: u32) {
+        let err = result.expect_err("transaction should fail").err;
+        assert_eq!(
+            err,
+            TransactionError::InstructionError(0, InstructionError::Custom(code)),
+        );
+    }
+
+    fn compute_units(result: &TransactionResult) -> u64 {
+        match result {
+            Ok(meta) => meta.compute_units_consumed,
+            Err(failed) => failed.meta.compute_units_consumed,
+        }
+    }
+
     // ---------- Instructions ----------
 
     fn init_library(svm: &mut LiteSVM, steward: &Keypair, name: &str) -> TransactionResult {
@@ -116,18 +132,18 @@ mod tests {
         send(svm, ix, wallet)
     }
 
-    fn add_lot(
-        svm: &mut LiteSVM,
-        signer: &Keypair,
+    fn add_lot_ix(
+        steward: &Pubkey,
         library: &Pubkey,
+        id: u64,
         variety: &str,
         qty: u32,
-    ) -> TransactionResult {
-        let id = fetch::<Library>(svm, library).lot_count;
-        let ix = Instruction {
+        note: &str,
+    ) -> Instruction {
+        Instruction {
             program_id: PROGRAM_ID,
             accounts: crate::accounts::AddLot {
-                steward: signer.pubkey(),
+                steward: *steward,
                 library: *library,
                 lot: lot_pda(library, id),
                 system_program: system_program::ID,
@@ -137,10 +153,28 @@ mod tests {
                 variety: variety.to_string(),
                 qty,
                 photo_hash: PHOTO,
-                note: "Donated by the founding members".to_string(),
+                note: note.to_string(),
             }
             .data(),
-        };
+        }
+    }
+
+    fn add_lot(
+        svm: &mut LiteSVM,
+        signer: &Keypair,
+        library: &Pubkey,
+        variety: &str,
+        qty: u32,
+    ) -> TransactionResult {
+        let id = fetch::<Library>(svm, library).lot_count;
+        let ix = add_lot_ix(
+            &signer.pubkey(),
+            library,
+            id,
+            variety,
+            qty,
+            "Donated by the founding members",
+        );
         send(svm, ix, signer)
     }
 
@@ -169,6 +203,40 @@ mod tests {
         send(svm, ix, wallet)
     }
 
+    #[allow(clippy::too_many_arguments)]
+    fn return_lot_ix(
+        wallet: &Pubkey,
+        library: &Pubkey,
+        loan: &Pubkey,
+        lot: &Pubkey,
+        child_id: u64,
+        qty: u32,
+        photo_hash: [u8; 32],
+        note: &str,
+    ) -> Instruction {
+        Instruction {
+            program_id: PROGRAM_ID,
+            accounts: crate::accounts::ReturnLot {
+                wallet: *wallet,
+                library: *library,
+                member: member_pda(library, wallet),
+                loan: *loan,
+                lot: *lot,
+                child_lot: lot_pda(library, child_id),
+                system_program: system_program::ID,
+            }
+            .to_account_metas(None),
+            data: crate::instruction::ReturnLot {
+                qty,
+                photo_hash,
+                note: note.to_string(),
+            }
+            .data(),
+        }
+    }
+
+    /// Returns a loan the way an honest client would: parent = the loan's lot,
+    /// child id = the library's current lot_count.
     fn return_lot(
         svm: &mut LiteSVM,
         wallet: &Keypair,
@@ -179,25 +247,16 @@ mod tests {
     ) -> TransactionResult {
         let lot = fetch::<Loan>(svm, loan).lot;
         let child_id = fetch::<Library>(svm, library).lot_count;
-        let ix = Instruction {
-            program_id: PROGRAM_ID,
-            accounts: crate::accounts::ReturnLot {
-                wallet: wallet.pubkey(),
-                library: *library,
-                member: member_pda(library, &wallet.pubkey()),
-                loan: *loan,
-                lot,
-                child_lot: lot_pda(library, child_id),
-                system_program: system_program::ID,
-            }
-            .to_account_metas(None),
-            data: crate::instruction::ReturnLot {
-                qty,
-                photo_hash,
-                note: "18/20 germinated".to_string(),
-            }
-            .data(),
-        };
+        let ix = return_lot_ix(
+            &wallet.pubkey(),
+            library,
+            loan,
+            &lot,
+            child_id,
+            qty,
+            photo_hash,
+            "18/20 germinated",
+        );
         send(svm, ix, wallet)
     }
 
@@ -473,5 +532,266 @@ mod tests {
         assert_eq!(gen2.parent, Some(gen1));
         assert_eq!(fetch::<Lot>(&w.svm, &gen1).parent, Some(w.root_lot));
         assert_eq!(gen2.contributor, alex.pubkey());
+    }
+
+    // ---------- Day 4: hardening from genchi genbutsu audit 3 ----------
+
+    /// Anchor's ConstraintSeeds: the PDA passed doesn't match the seeds.
+    const ANCHOR_CONSTRAINT_SEEDS: u32 = 2006;
+    /// Anchor's AccountNotInitialized.
+    const ANCHOR_ACCOUNT_NOT_INITIALIZED: u32 = 3012;
+    /// System program "account already in use" (create_account on an existing account).
+    const SYSTEM_ACCOUNT_IN_USE: u32 = 0;
+    /// Measured max on 22 Oct was 22,961 CU (borrow). Budget leaves ~1.7x headroom.
+    const CU_BUDGET: u64 = 40_000;
+
+    #[test]
+    fn return_claiming_wrong_parent_lot_rejected() {
+        let mut w = world();
+        let steward = w.steward.insecure_clone();
+        add_lot(&mut w.svm, &steward, &w.library, "Heirloom tomato", 50).unwrap();
+        let other_lot = lot_pda(&w.library, 1);
+
+        let sam = w.sam.insecure_clone();
+        borrow(&mut w.svm, &sam, &w.library, &w.root_lot, 10).unwrap();
+        let loan = loan_pda(&member_pda(&w.library, &sam.pubkey()), 0);
+
+        // Sam borrowed beans but claims the offspring descend from the tomato.
+        let ix = return_lot_ix(
+            &sam.pubkey(),
+            &w.library,
+            &loan,
+            &other_lot,
+            2,
+            30,
+            PHOTO,
+            "",
+        );
+        assert_err(send(&mut w.svm, ix, &sam), SeedLibraryError::WrongLot);
+        assert_eq!(fetch::<Loan>(&w.svm, &loan).status, LoanStatus::Open);
+    }
+
+    #[test]
+    fn add_lot_variety_limit_is_in_bytes() {
+        let mut w = world();
+        let steward = w.steward.insecure_clone();
+
+        assert_err(
+            add_lot(&mut w.svm, &steward, &w.library, "", 5),
+            SeedLibraryError::InvalidVariety,
+        );
+        assert_err(
+            add_lot(&mut w.svm, &steward, &w.library, &"a".repeat(33), 5),
+            SeedLibraryError::InvalidVariety,
+        );
+        // 12 characters but 36 bytes: rejected. The UI must count bytes.
+        assert_err(
+            add_lot(&mut w.svm, &steward, &w.library, &"青菜".repeat(6), 5),
+            SeedLibraryError::InvalidVariety,
+        );
+        // Boundaries that must pass: 32 ASCII bytes, and 10 CJK characters (30 bytes).
+        add_lot(&mut w.svm, &steward, &w.library, &"a".repeat(32), 5).unwrap();
+        add_lot(&mut w.svm, &steward, &w.library, &"青菜".repeat(5), 5).unwrap();
+    }
+
+    #[test]
+    fn note_limit_enforced_on_add_and_return() {
+        let mut w = world();
+        let steward = w.steward.insecure_clone();
+        let id = fetch::<Library>(&w.svm, &w.library).lot_count;
+        let ix = add_lot_ix(
+            &steward.pubkey(),
+            &w.library,
+            id,
+            "Kale",
+            5,
+            &"n".repeat(81),
+        );
+        assert_err(
+            send(&mut w.svm, ix, &steward),
+            SeedLibraryError::NoteTooLong,
+        );
+        let ix = add_lot_ix(
+            &steward.pubkey(),
+            &w.library,
+            id,
+            "Kale",
+            5,
+            &"n".repeat(80),
+        );
+        send(&mut w.svm, ix, &steward).unwrap();
+
+        let sam = w.sam.insecure_clone();
+        borrow(&mut w.svm, &sam, &w.library, &w.root_lot, 10).unwrap();
+        let loan = loan_pda(&member_pda(&w.library, &sam.pubkey()), 0);
+        let child_id = fetch::<Library>(&w.svm, &w.library).lot_count;
+        let ix = return_lot_ix(
+            &sam.pubkey(),
+            &w.library,
+            &loan,
+            &w.root_lot,
+            child_id,
+            30,
+            PHOTO,
+            &"n".repeat(81),
+        );
+        assert_err(send(&mut w.svm, ix, &sam), SeedLibraryError::NoteTooLong);
+    }
+
+    #[test]
+    fn init_library_twice_fails() {
+        let mut w = world();
+        let steward = w.steward.insecure_clone();
+        assert_code(
+            init_library(&mut w.svm, &steward, "Second tin"),
+            SYSTEM_ACCOUNT_IN_USE,
+        );
+        assert_eq!(
+            fetch::<Library>(&w.svm, &w.library).name,
+            "Allotment Seed Tin"
+        );
+    }
+
+    #[test]
+    fn non_member_cannot_borrow() {
+        let mut w = world();
+        let stranger = funded(&mut w.svm);
+        let member = member_pda(&w.library, &stranger.pubkey());
+        let ix = Instruction {
+            program_id: PROGRAM_ID,
+            accounts: crate::accounts::Borrow {
+                wallet: stranger.pubkey(),
+                library: w.library,
+                member,
+                lot: w.root_lot,
+                loan: loan_pda(&member, 0),
+                system_program: system_program::ID,
+            }
+            .to_account_metas(None),
+            data: crate::instruction::Borrow { qty: 1 }.data(),
+        };
+        assert_code(
+            send(&mut w.svm, ix, &stranger),
+            ANCHOR_ACCOUNT_NOT_INITIALIZED,
+        );
+    }
+
+    /// Distributed-systems rule: every lot creation in a library serialises on
+    /// Library.lot_count. A client that built its transaction from a stale count
+    /// gets ConstraintSeeds and must re-read the library and rebuild.
+    #[test]
+    fn stale_lot_count_rejected_then_retry_succeeds() {
+        let mut w = world();
+        let sam = w.sam.insecure_clone();
+        let alex = funded(&mut w.svm);
+        join(&mut w.svm, &w.library, &alex).unwrap();
+        borrow(&mut w.svm, &sam, &w.library, &w.root_lot, 10).unwrap();
+        borrow(&mut w.svm, &alex, &w.library, &w.root_lot, 10).unwrap();
+        let sams_loan = loan_pda(&member_pda(&w.library, &sam.pubkey()), 0);
+        let alexs_loan = loan_pda(&member_pda(&w.library, &alex.pubkey()), 0);
+
+        // Both clients read lot_count = 1 before either transaction lands.
+        let stale = fetch::<Library>(&w.svm, &w.library).lot_count;
+        let ix_sam = return_lot_ix(
+            &sam.pubkey(),
+            &w.library,
+            &sams_loan,
+            &w.root_lot,
+            stale,
+            30,
+            PHOTO,
+            "",
+        );
+        let ix_alex = return_lot_ix(
+            &alex.pubkey(),
+            &w.library,
+            &alexs_loan,
+            &w.root_lot,
+            stale,
+            30,
+            PHOTO,
+            "",
+        );
+        send(&mut w.svm, ix_sam, &sam).unwrap();
+        assert_code(send(&mut w.svm, ix_alex, &alex), ANCHOR_CONSTRAINT_SEEDS);
+
+        // Retry with a fresh read succeeds.
+        return_lot(&mut w.svm, &alex, &w.library, &alexs_loan, 30, PHOTO).unwrap();
+        assert_eq!(fetch::<Library>(&w.svm, &w.library).lot_count, 3);
+    }
+
+    /// Lot and loan addresses are predictable, so anyone can send lamports to
+    /// them first. Anchor's `init` must still succeed (lamport griefing).
+    #[test]
+    fn pre_funded_pdas_do_not_block_borrow_or_return() {
+        let mut w = world();
+        let sam = w.sam.insecure_clone();
+        let member = member_pda(&w.library, &sam.pubkey());
+        w.svm.airdrop(&loan_pda(&member, 0), 1_000_000).unwrap();
+        w.svm.airdrop(&lot_pda(&w.library, 1), 1_000_000).unwrap();
+
+        borrow(&mut w.svm, &sam, &w.library, &w.root_lot, 10).unwrap();
+        return_lot(
+            &mut w.svm,
+            &sam,
+            &w.library,
+            &loan_pda(&member, 0),
+            30,
+            PHOTO,
+        )
+        .unwrap();
+        assert_eq!(
+            fetch::<Lot>(&w.svm, &lot_pda(&w.library, 1)).parent,
+            Some(w.root_lot)
+        );
+    }
+
+    #[test]
+    fn borrowing_the_whole_lot_empties_it() {
+        let mut w = world();
+        let sam = w.sam.insecure_clone();
+        let alex = funded(&mut w.svm);
+        join(&mut w.svm, &w.library, &alex).unwrap();
+
+        borrow(&mut w.svm, &sam, &w.library, &w.root_lot, 100).unwrap();
+        assert_eq!(fetch::<Lot>(&w.svm, &w.root_lot).qty_available, 0);
+        assert_err(
+            borrow(&mut w.svm, &alex, &w.library, &w.root_lot, 1),
+            SeedLibraryError::InsufficientSeed,
+        );
+    }
+
+    #[test]
+    fn every_instruction_within_compute_budget() {
+        let mut svm = setup();
+        let steward = funded(&mut svm);
+        let library = library_pda(&steward.pubkey());
+        let sam = funded(&mut svm);
+        let member = member_pda(&library, &sam.pubkey());
+
+        let measured = [
+            (
+                "init_library",
+                init_library(&mut svm, &steward, "Allotment Seed Tin"),
+            ),
+            (
+                "add_lot",
+                add_lot(&mut svm, &steward, &library, "Borlotti bean", 100),
+            ),
+            ("join", join(&mut svm, &library, &sam)),
+            (
+                "borrow",
+                borrow(&mut svm, &sam, &library, &lot_pda(&library, 0), 10),
+            ),
+            (
+                "return_lot",
+                return_lot(&mut svm, &sam, &library, &loan_pda(&member, 0), 30, PHOTO),
+            ),
+        ];
+        for (name, result) in measured {
+            let cu = compute_units(&result);
+            assert!(result.is_ok(), "{name} failed");
+            assert!(cu < CU_BUDGET, "{name} used {cu} CU, budget {CU_BUDGET}");
+        }
     }
 }
