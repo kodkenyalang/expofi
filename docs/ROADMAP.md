@@ -16,10 +16,13 @@ Four-week online hackathon, started Monday 12 October 2026, with three checkpoin
 
 - [x] `seed_library` program core: `init_library`, `join`, `add_lot`, `borrow`, `return_lot` (Days 2–3, 21 Oct)
 - [ ] `forgive`, `attest_germination`
-- [x] LiteSVM tests for every rule built so far: 13 tests, exact error codes, mutation-checked ([ARCHITECTURE.md](ARCHITECTURE.md#tests))
+- [x] LiteSVM tests for every rule built so far: 22 tests, exact error codes, 19/19 mutants killed ([ARCHITECTURE.md](ARCHITECTURE.md#tests))
+- [x] Genchi genbutsu audit 3 (deep and wide) on days 1–3; all high findings fixed (22 Oct)
+- [x] Interview kit: script mapped to the four open decisions, anonymised note template ([interviews/](interviews/README.md))
+- [ ] **Decide before deploy (K22):** sponsor-paid rent (`payer` signer) and closing returned loans
 - [ ] Chaos cases on the client side (RPC down, wallet reject, blockhash expiry)
 - [x] Own program keypair (`EqkK…LzZby`)
-- [ ] Deploy to devnet, regenerate Codama client
+- [ ] Deploy to devnet (wallet has 21.8 SOL; deploy needs ~2.56), regenerate Codama client
 - [x] Toolchain poka-yoke: `npm run anchor-check` blocks `anchor-build`/`setup` when the CLI doesn't match `anchor-lang`
 - [x] CI on GitHub Actions: web (`npm ci && npm run ci`) and program (`cargo build-sbf && cargo test`) jobs
 

@@ -262,3 +262,127 @@ Program (build-sbf, LiteSVM tests):  success  4 min  (13 seed_library tests list
 - **The buyer.** 0 coordinator interviews. This is now the constraint (KAIZEN.md, TC1).
 - The program on devnet, and a wallet signing a real `borrow` in a browser.
 - Codama client for `seed_library` (needs a decision on K15 first).
+
+---
+
+# Audit 3: deep and wide, on days 1–3
+
+**Date:** 22 October 2026 (calendar Day 3), before building plan days 4–6. **Deep:** every rule in the program is challenged, not just run. **Wide:** every layer from network to product, then cross-checked against each other and against the docs.
+
+## Summary
+
+| #   | Layer                 | Finding                                                                                                                                                  | Severity | Fixed in                                  |
+| --- | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ----------------------------------------- |
+| 22  | Toolchain × our guard | `npm run anchor-check` at the repo root switched the machine's Solana CLI to 3.1.10. The avm shim uses its global default where there's no `Anchor.toml` | High     | Day 5: guard runs from `anchor/` (K19)    |
+| 23  | Tests                 | Mutation sweep: 15/19 killed. Survivors: lineage (`has_one = lot`), variety limit, two note limits                                                       | High     | Day 4: 9 tests, 19/19 (K18)               |
+| 24  | Repo × keypair        | Program keypair existed only in gitignored `target/deploy/`. A fresh clone's `build-sbf` silently generated a different one (`82xu…`)                    | High     | Day 5: backup + guard warning (K20)       |
+| 25  | Product × program     | Member pays 0.00629 SOL rent per borrow + return, locked forever; nobody else can pay                                                                    | Medium   | Decision before deploy (K22)              |
+| 26  | Program × users       | Error messages said "characters"; limits are bytes. 12 CJK characters (36 bytes) rejected                                                                | Medium   | Day 4: messages + CJK test (K21)          |
+| 27  | Distributed           | Two lot creations from one `lot_count` → second fails `2006 ConstraintSeeds`                                                                             | Medium   | Day 4: test; client retry rule (K23)      |
+| 28  | Program               | Forged parent lot rejected only by generic `2001`                                                                                                        | Low      | Day 4: `WrongLot` (6012)                  |
+| 29  | CI                    | Node 20 actions, `ubuntu-latest` migration, Solana version duplicated in CI and `Anchor.toml`                                                            | Low      | Day 5: v7/v7/v6, `ubuntu-24.04`, read pin |
+| 30  | Docs × reality        | AGENT.md said a `forgive` path exists                                                                                                                    | Low      | Day 6 (K25)                               |
+| 31  | Repo settings         | No `engines`; no branch protection; Dependabot off; no license                                                                                           | Low      | `engines` added; rest owner's call (K26)  |
+| 32  | Network               | npm and GitHub fetches 12–130 s; `npm ci` ETIMEDOUT once; RustSec DB fetch failed                                                                        | Env      | Retries; offline audit (K24)              |
+
+## What held up
+
+| Check                                                        | Result                                                                                              |
+| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------- |
+| Fresh clone → `npm ci`, `npm run ci`, `npm run program-test` | All pass (after one network retry)                                                                  |
+| Secrets in git history                                       | None (no keypair, `.env`, or 64-byte key arrays in any commit)                                      |
+| GitHub secret scanning + push protection                     | Enabled                                                                                             |
+| IDL vs `declare_id!`                                         | Match: 5 instructions, 4 accounts, 12 errors                                                        |
+| Compute units                                                | init 7,112 · add_lot 11,789 · join 8,573 · borrow 22,961 · return_lot 22,041                        |
+| Lamport griefing (pre-funded PDAs)                           | Borrow and return still succeed. Anchor's `init` handles it                                         |
+| `npm audit --omit=dev`                                       | 0 vulnerabilities                                                                                   |
+| `cargo audit --no-fetch` (DB 2026-10-17)                     | 0 vulnerabilities; 6 warnings. Only `bincode` (unmaintained) reaches the program, via `anchor-lang` |
+| Devnet readiness                                             | Deploy wallet 21.83 SOL; program needs ~2.56 SOL (2 × 251,624 B rent); `EqkK…` not yet on chain     |
+| Solana MCP endpoint                                          | HTTP 200 (12 s)                                                                                     |
+
+## Deep: mutation sweep
+
+`scripts/mutation-check.py` deletes or weakens one rule, rebuilds, and runs the tests. Before Day 4:
+
+```
+add_lot: variety check           SURVIVED
+add_lot: note length             SURVIVED
+return: has_one lot              SURVIVED      ← lineage could be forged and no test would notice
+return: note length              SURVIVED
+15/19 killed
+```
+
+After Day 4 (`npm run program-mutants`):
+
+```
+return: has_one lot              KILLED by return_claiming_wrong_parent_lot_rejected
+add_lot: variety check           KILLED by add_lot_variety_limit_is_in_bytes
+add_lot: note length             KILLED by note_limit_enforced_on_add_and_return
+return: note length              KILLED by note_limit_enforced_on_add_and_return
+19/19 killed; survivors: []
+```
+
+## Deep: probes (temporary module, removed after)
+
+```
+member cost: join 1466600 | borrow 1974680 | return 2844680 | total 6285960 lamports
+size Library 89 · Member 82 · Lot 280 · Loan 155 bytes
+borrow into pre-funded loan PDA: Ok
+return into pre-funded lot PDA:  Ok
+second return (stale lot_count): Err(InstructionError(0, Custom(2006)))
+return claiming a different parent lot: Err(InstructionError(0, Custom(2001)))
+variety '青菜青菜青菜青菜青菜青菜' (12 chars, 36 bytes): Err(InstructionError(0, Custom(6001)))
+non-member borrow: Err(InstructionError(0, Custom(3012)))
+init_library twice: Err(InstructionError(0, Custom(0)))
+```
+
+Every probe became a permanent test on Day 4.
+
+## Wide: the toolchain flip (cross-sectional)
+
+```
+$ cd /tmp && anchor --version && solana --version
+anchor-cli 1.1.2
+solana-cli 3.1.10                       ← the shim installed and activated 3.1.10
+$ cd expofi && npm run anchor-check && solana --version
+✓ anchor-cli 1.1.2 matches anchor-lang 1.1.2
+solana-cli 3.1.10                       ← our own Day 1 guard caused the flip at the repo root
+$ cd expofi/anchor && anchor --version && solana --version
+solana-cli 3.1.14                       ← and anchor/ flips it back
+```
+
+Each layer looked fine alone. The defect only shows when you follow one command across the guard, avm, `Anchor.toml` location, and the machine's `active_release` symlink. After the Day 5 fix:
+
+```
+== machine flipped to 3.1.10 by anchor outside the repo
+$ npm run anchor-check
+✓ anchor-cli 1.1.2 and solana-cli 3.1.14 match anchor/Anchor.toml
+solana after: 3.1.14
+== broken pin (solana_version = "9.9.9")
+✖ Toolchain check failed … exit=1
+```
+
+## Wide: fresh clone vs this machine
+
+```
+$ solana address -k clone/anchor/target/deploy/seed_library-keypair.json
+82xuD5RU9MEVzNd3cDLpVsiMrXFe7KtgTKpcpdDDWkyH     ← generated by build-sbf in the clone
+$ solana address -k expofi/anchor/target/deploy/seed_library-keypair.json
+EqkKhhUF8yBnxHEXT2E8B4sdh36N4E4hHjqVRPbLzZby     ← matches declare_id!
+```
+
+Tests pass in both, because LiteSVM loads the program at `declare_id!`. A **deploy** from the clone would land at `82xu…`, where every instruction fails `DeclaredProgramIdMismatch`. The guard now warns about this. The real keypair is backed up to `~/.config/solana/expofi/seed_library-keypair.json` (mode 600).
+
+## CI after Day 5 (run 39746072066)
+
+```
+Web:     success 35 s · Program: success 41 s (warm cache)
+SOLANA_VERSION: 3.1.14 (read from Anchor.toml)
+annotations: 2 (template lint warnings only; Node 20 and Ubuntu 26 warnings gone)
+```
+
+## Still not seen
+
+- **A seed-library coordinator.** M10 = 0. TC1 missed on this condition only.
+- The program on devnet; a browser wallet signing `borrow`.
+- `cargo audit` against a fresh advisory DB (move to CI, K24).

@@ -131,7 +131,7 @@ Never reason about the system from memory, a README, or a template's claims. Go 
 
 Model the library as **stocks** (seed in each lot, member trust) and **flows** (borrow, return, fail).
 
-- **Feedback loop:** failed returns → fewer lots → stricter stewards → fewer borrows. The borrow gate is a _balancing_ loop. Make sure it can't drain the library into a death spiral (a steward-only "forgive" path exists for that reason).
+- **Feedback loop:** failed returns → fewer lots → stricter stewards → fewer borrows. The borrow gate is a _balancing_ loop. Make sure it can't drain the library into a death spiral. A steward-only `forgive` path is designed for that (not built yet: it waits on coordinator interviews).
 - **Delays:** a growing season is a 4–9 month delay between borrow and return. Design every screen for that delay. The demo compresses time and **says so on camera**.
 - **Leverage points:** change the _rules_ (borrow gate, lineage) before the _parameters_ (quantities, deadlines). Rules are on-chain. Parameters are config.
 

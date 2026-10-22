@@ -2,10 +2,10 @@
 
 Two programs:
 
-| Program        | ID                                             | Status                                                                      |
-| -------------- | ---------------------------------------------- | --------------------------------------------------------------------------- |
-| `seed_library` | `EqkKhhUF8yBnxHEXT2E8B4sdh36N4E4hHjqVRPbLzZby` | ExpoFi. 5 of 7 instructions, 13 LiteSVM tests. Not deployed yet             |
-| `vault`        | `F4jZpgbtTb6RWNWq6v35fUeiAsRJMrDczVPv9U23yXjB` | Template from `create-solana-dapp`. Removed once the new UI lands (Cycle 2) |
+| Program        | ID                                             | Status                                                                                |
+| -------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `seed_library` | `EqkKhhUF8yBnxHEXT2E8B4sdh36N4E4hHjqVRPbLzZby` | ExpoFi. 5 of 7 instructions, 22 LiteSVM tests, 19/19 mutants killed. Not deployed yet |
+| `vault`        | `F4jZpgbtTb6RWNWq6v35fUeiAsRJMrDczVPv9U23yXjB` | Template from `create-solana-dapp`. Removed once the new UI lands (Cycle 2)           |
 
 Design, accounts, rules, and the test matrix: [../docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md).
 
@@ -28,7 +28,7 @@ cargo test             # LiteSVM tests load those .so files
 
 > **Toolchain:** this workspace needs **Anchor CLI 1.1.x** (`anchor-lang = "1.1.2"`). On Anchor 0.30.x, `anchor build` silently rewrites `declare_id!` and `Anchor.toml` to a fresh local key. `npm run anchor-check` (run automatically by `anchor-build` and `setup`) stops that from happening.
 
-> **Keypair:** `target/deploy/seed_library-keypair.json` is the `seed_library` program's identity and is **gitignored**. Back it up before you deploy. Lose it and you lose the program ID (before deploy) or upgrade control (after).
+> **Keypair:** `target/deploy/seed_library-keypair.json` is the `seed_library` program's identity and is **gitignored**. On the main dev machine it is backed up to `~/.config/solana/expofi/seed_library-keypair.json` (mode 600). A fresh clone's `cargo build-sbf` generates a _different_ keypair and the tests still pass, so only `npm run anchor-check` notices (it warns). Never deploy from a machine where it warns; copy the real keypair in over a secure channel first.
 
 ## Template vault program
 

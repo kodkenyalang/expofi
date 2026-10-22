@@ -23,11 +23,64 @@ gh run list --json headSha,databaseId,conclusion,createdAt
 
 ## [Unreleased]
 
-Written 2026-10-21. A file can't record the hash or push time of the commit that adds it, so this entry gets its timestamps in the next update.
+Written 2026-10-22. A file can't record the hash or push time of the commit that adds it, so this entry gets its timestamps in the next update.
 
 ### Added
 
-- `CHANGELOG.md`: this file, built from git history, the push reflog, GitHub's activity log, and CI runs.
+- `docs/interviews/`: interview kit for the current constraint (M10 = 0). A 16-question script mapped to the four open product decisions, an anonymised note template, and privacy rules for a public repo.
+- `docs/GENCHI_GENBUTSU.md`: audit 3 (deep and wide on days 1–3), with probe output, the mutation sweep, the toolchain flip traced across layers, and fresh-clone vs local keypair.
+- `KAIZEN.md`: Day 3 measurements; new metrics M13 (mutation score) and M14 (member cost); TC1 checkpoint (met except interviews), Cycle 1 hansei, Cycle 2 changes; newspaper rows K18–K27.
+- `docs/ARCHITECTURE.md`: error-code table (append-only rule), costs and limits per instruction, concurrency, keypair handling, 9 new test rows, three decisions.
+
+### Changed
+
+- K14 and K16 closed. `README.md`, `anchor/README.md`, `CLAUDE.md`, `docs/ROADMAP.md`, `.superstack/build-context.md` updated to 22 tests, 19/19 mutants, and the new guard.
+
+### Fixed
+
+- `AGENT.md` said a steward `forgive` path exists. It is designed, not built (K25).
+
+---
+
+## 2026-10-22 16:12:48 +08:00 (08:12:48 UTC): Kaizen days 4–5: hardening, guard fix, CI update
+
+**Push:** `2a125a2..35e1bb1` to `main` · **CI:** [run 39746072066](https://github.com/kodkenyalang/expofi/actions/runs/39746072066) ✅ success (08:12:50 → 08:13:35 UTC)
+
+| Commit    | Committed                                 | Message                                                               | Size                |
+| --------- | ----------------------------------------- | --------------------------------------------------------------------- | ------------------- |
+| `35e1bb1` | 2026-10-22 16:12:37 +08:00 (08:12:37 UTC) | Build Kaizen days 4-5: harden program, fix toolchain guard, update CI | 7 files, +560 / −64 |
+
+### Added
+
+- 9 LiteSVM tests (13 → 22): forged parent lot, byte limits including a CJK boundary, note limits, double init, non-member borrow, stale `lot_count` then retry, pre-funded PDAs (lamport griefing), emptying a lot, and a 40,000 compute-unit budget.
+- `WrongLot` error (6012) for a return that names a different parent lot. Appended, so 6000–6011 are unchanged.
+- `scripts/mutation-check.py` and `npm run program-mutants`: removes each of 19 rules in turn and exits 1 if any survives. 15/19 → 19/19 killed.
+- `package.json` `engines`: Node ≥ 20.18.
+
+### Changed
+
+- `npm run anchor-check` runs `anchor` from `anchor/`, checks `anchor-lang` = `[toolchain] anchor_version` = CLI and the active Solana CLI = `solana_version`, and warns when a `target/deploy` keypair doesn't match `declare_id!`.
+- CI: `actions/checkout` v7, `actions/setup-node` v7, `actions/cache` v6 (Node 24); runner pinned to `ubuntu-24.04`; the Solana version is read from `Anchor.toml` instead of a duplicated literal.
+- Error messages state text limits in bytes.
+
+### Fixed
+
+- The Day 1 guard switched the machine's Solana CLI to 3.1.10 whenever it ran at the repo root (K19).
+- CI deprecation warnings for Node 20 actions and the `ubuntu-latest` migration (K16).
+
+---
+
+## 2026-10-21 19:57:02 +08:00 (11:57:02 UTC): Changelog
+
+**Push:** `97bacde..2a125a2` to `main` · **CI:** [run 39595772005](https://github.com/kodkenyalang/expofi/actions/runs/39595772005) ✅ success (11:57:04 → 11:57:38 UTC)
+
+| Commit    | Committed                                 | Message                                       | Size          |
+| --------- | ----------------------------------------- | --------------------------------------------- | ------------- |
+| `2a125a2` | 2026-10-21 19:56:59 +08:00 (11:56:59 UTC) | Add CHANGELOG with timestamped entry per push | 2 files, +129 |
+
+### Added
+
+- `CHANGELOG.md`: one entry per push, built from git history, the push reflog, GitHub's activity log, and CI runs. Linked from the README.
 
 ---
 

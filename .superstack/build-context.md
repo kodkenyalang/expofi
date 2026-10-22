@@ -51,18 +51,32 @@ Phase 2 (Build) handoff, written by `scaffold-project` on 2026-10-18.
       "return_lot"
     ],
     "instructions_pending": ["forgive", "attest_germination"],
-    "litesvm_tests": 13
+    "litesvm_tests": 22,
+    "mutation_score": "19/19",
+    "keypair_backup": "~/.config/solana/expofi/seed_library-keypair.json (dev machine only)"
   },
   "toolchain": {
     "anchor_cli": "1.1.2 (avm, built from source; GLIBC 2.35)",
     "solana_cli": "3.1.14",
     "pinned_in": "anchor/Anchor.toml [toolchain]",
-    "guard": "npm run anchor-check"
+    "guard": "npm run anchor-check (runs from anchor/, checks anchor and solana pins, warns on keypair mismatch)"
   },
   "ci": ".github/workflows/ci.yml (web + program), green on first run 2026-10-21",
   "blockers": [
-    "0 of 5 seed-library coordinator interviews (the current constraint)"
+    "0 of 5 seed-library coordinator interviews (the current constraint; TC1 missed on this only)",
+    "K22: decide sponsor-paid rent and loan closing before the first devnet deploy"
   ],
+  "verified_2026_10_22": {
+    "fresh_clone": "npm ci + npm run ci + npm run program-test pass",
+    "npm_run_program_test": "seed_library 22/22, vault 4/4",
+    "npm_run_program_mutants": "19/19 killed",
+    "max_compute_units": "22961 (borrow), budget 40000",
+    "member_cost_per_cycle_lamports": 6285960,
+    "github_actions_run": "39746072066 success (checkout v7, setup-node v7, ubuntu-24.04)",
+    "npm_audit_prod": "0 vulnerabilities",
+    "cargo_audit": "0 vulnerabilities, 6 warnings (offline DB 2026-10-17)",
+    "secrets_in_git_history": "none"
+  },
   "verified_2026_10_21": {
     "npm_run_ci": "pass (0 errors, 3 template lint warnings)",
     "npm_run_setup": "pass",
@@ -83,6 +97,6 @@ Phase 2 (Build) handoff, written by `scaffold-project` on 2026-10-18.
 }
 ```
 
-`tests_passing` became `true` on 2026-10-21, when the **seed_library** tests passed locally and in CI. It covers the 5 instructions built so far. `forgive` and `attest_germination` still need tests.
+`tests_passing` became `true` on 2026-10-21, when the **seed_library** tests passed locally and in CI. It covers the 5 instructions built so far (22 tests, 19/19 mutants killed on 2026-10-22). `forgive` and `attest_germination` still need tests.
 
 **Next:** `/build-with-claude`.
