@@ -43,12 +43,12 @@ Ask about **what happened**, not what they would do. Past behaviour is evidence;
 7. When seed comes back, who checks it? What do they look at?
 8. Has anyone returned seed that turned out to be the wrong thing, or not viable?
 
-**Decision 3: crop failure** (`forgive` is not built)
+**Decision 3: crop failure** (`forgive` is not built, so today that member stays blocked)
 
 9. What happens when someone's crop fails and they have nothing to return?
 10. Should that person be able to borrow again next season? Who decides?
 
-**Decision 4: who pays** (a member currently pays ~0.0063 SOL of account rent per borrow-and-return)
+**Decision 4: who pays** (a member currently pays ~0.0046 SOL of account rent per borrow-and-return, unless the society sponsors it, which the program now allows)
 
 11. Does the library or society have any budget, or a membership fee? What is it spent on?
 12. Would members expect to pay anything to borrow? (Note the reaction, not just the answer.)

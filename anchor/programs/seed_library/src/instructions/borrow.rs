@@ -5,8 +5,11 @@ use crate::state::{Library, Loan, LoanStatus, Lot, Member};
 
 #[derive(Accounts)]
 pub struct Borrow<'info> {
-    #[account(mut)]
     pub wallet: Signer<'info>,
+    /// Pays the rent: the member, or a sponsor such as the society
+    /// (KAIZEN.md K22). Paying someone's rent grants no rights over the account.
+    #[account(mut)]
+    pub payer: Signer<'info>,
     pub library: Account<'info, Library>,
     #[account(
         mut,
@@ -18,7 +21,7 @@ pub struct Borrow<'info> {
     pub lot: Account<'info, Lot>,
     #[account(
         init,
-        payer = wallet,
+        payer = payer,
         space = 8 + Loan::INIT_SPACE,
         seeds = [b"loan", member.key().as_ref(), &member.loan_count.to_le_bytes()],
         bump,

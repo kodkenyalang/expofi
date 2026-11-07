@@ -386,3 +386,197 @@ annotations: 2 (template lint warnings only; Node 20 and Ubuntu 26 warnings gone
 - **A seed-library coordinator.** M10 = 0. TC1 missed on this condition only.
 - The program on devnet; a browser wallet signing `borrow`.
 - `cargo audit` against a fresh advisory DB (move to CI, K24).
+
+---
+
+# Audit 4: plan days 7–9, from a stale working tree to live devnet
+
+**Date:** 7 November 2026 (calendar Day 19, the day before submission). Same method: every line comes from a command that was run. The audit started from what the docs couldn't say: the docs said 22 Oct, and the tree said otherwise.
+
+## Summary
+
+| #   | Layer               | Finding                                                                                                                                    | Severity | Status                                       |
+| --- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | -------- | -------------------------------------------- |
+| 33  | Process × Repo      | A full plan day (vault removal, K22, keypair restore) sat uncommitted for 9 days after a session ended mid-build. Docs and CI knew nothing | High     | Verified, landed; commit per day (K37)       |
+| 34  | Toolchain × Machine | `anchor` failed on every call. avm 1.2.2 installs its own idea of platform-tools (v1.57, truncated) and repoints the 3.1.14 sysroot at it  | High     | Shim bypassed (K29)                          |
+| 35  | Chain               | `EqkK…` was not on devnet                                                                                                                  | High     | Deployed. Hash matches the local build       |
+| 36  | Network × Users     | Public devnet RPC 429s and connect timeouts within seconds; the automatic faucet refuses                                                   | High     | Retried; dedicated RPC is owner's call (K30) |
+| 37  | UI × Chain          | A member was told "You aren't a member yet" while loading                                                                                  | High     | Fixed; E2E assertion (K33)                   |
+| 38  | Client × Program    | A stale read fails `2006`, and the mapped message blamed "someone else" in a borrow that nobody else touched                               | Medium   | Message fixed; borrow re-reads (K31)         |
+| 39  | UI × Fonts          | No font had ever loaded, including the template's Inter. Nothing errors                                                                    | Medium   | Fixed; E2E assertion (K34)                   |
+| 40  | Docs × Devnet       | Member cost and deploy cost in every doc came from LiteSVM and from arithmetic, and both were wrong for devnet                             | Medium   | Measured and corrected (K38)                 |
+| 41  | Product × Reality   | A stranger still can't finish: no URL, and a fresh wallet can't get SOL unaided                                                            | High     | **Open** (K35, K36)                          |
+| 42  | Test                | One E2E timeout in 17 runs, cause not proven                                                                                               | Medium   | **Open**, status C (K31)                     |
+
+## What was found first
+
+```
+$ git log -1 --format='%h %ad %s' --date=short
+b84bcb5 2026-10-22 Kaizen day 6: TC1 checkpoint, audit 3, interview kit, docs
+$ git status --short | wc -l          # 32 changed paths, all dated 29 Oct
+$ ls app/generated                    # empty: vault deleted, no client generated
+$ npx tsc --noEmit
+app/page.tsx(11,27): error TS2307: Cannot find module './components/vault-card'    # still the template
+$ solana program show EqkK…LzZby --url devnet
+Error: Unable to find the account
+```
+
+## Toolchain: the shim, again (cross-sectional)
+
+```
+$ cd anchor && anchor --version
+The latest cargo build-sbf platform-tools (v1.58) is not installed. …
+Error: platform-tools v1.57 installation did not create a Rust sysroot at ~/.cache/solana/v1.57/platform-tools
+$ tar -tjf ~/.cache/solana/v1.57/platform-tools/tmp-platform-tools-linux-x86_64.tar.bz2
+tar: Unexpected EOF in archive
+$ avm --version; ls -la --time-style=long-iso ~/.avm/bin/anchor-1.2.2
+avm 1.2.2
+… 2026-10-29 17:27 …                  # an hour after the session that stopped here
+$ avm platform-tools resolve
+platform-tools v1.57 (rustc 1.95.0, solana 3.1.14 → map ([toolchain] solana_version in …/Anchor.toml))
+$ cargo build-sbf --version
+solana-cargo-build-sbf 3.1.14
+platform-tools v1.52                  # two tools, one Solana version, two answers
+$ readlink …/releases/3.1.14/…/sbf/dependencies/platform-tools
+~/.cache/solana/v1.57/platform-tools  # the shim repointed it, and my own diagnostic call did it again
+$ ~/.avm/bin/anchor-1.1.2 --version
+anchor-cli 1.1.2                      # the real binary was fine all along
+```
+
+`cargo build-sbf` puts its own link back to v1.52. After `scripts/anchor.mjs`:
+
+```
+$ npm run anchor-check
+✓ anchor-cli 1.1.2 and solana-cli 3.1.14 match anchor/Anchor.toml
+$ npm run anchor-build                # IDL built; declare_id! and Anchor.toml unchanged
+$ readlink …/dependencies/platform-tools
+~/.cache/solana/v1.52/platform-tools
+$ npm run codama:js && cp -r app/generated gen1 && npm run codama:js && diff -r app/generated gen1
+                                      # no output: generation is deterministic (K15)
+```
+
+## Chain: the four-way ID check, plus one
+
+```
+$ npm run program-deploy
+Program Id: EqkKhhUF8yBnxHEXT2E8B4sdh36N4E4hHjqVRPbLzZby     # wallet 19.8167 → 18.5296 SOL
+declare_id!("EqkKhhUF8yBnxHEXT2E8B4sdh36N4E4hHjqVRPbLzZby");
+seed_library = "EqkKhhUF8yBnxHEXT2E8B4sdh36N4E4hHjqVRPbLzZby"
+"EqkKhhUF8yBnxHEXT2E8B4sdh36N4E4hHjqVRPbLzZby" as Address<…>  # generated client
+$ solana program dump EqkK…LzZby deployed.so --url devnet && sha256sum target/deploy/seed_library.so deployed.so
+d8dc1014629e834d…  target/deploy/seed_library.so
+d8dc1014629e834d…  deployed.so
+```
+
+## Devnet: rules against the live program (`npm run devnet-smoke`)
+
+```
+PASS  join
+PASS  borrow
+PASS  blocked borrow refused by the program  (6006: "You have an open loan. Return your seed before borrowing again")
+PASS  failure reads as a program refusal
+PASS  blocked borrow changed nothing
+PASS  stale loan_count maps to a plain message  (The library changed while this was on its way. Nothing happened. Try again.)
+PASS  return writes the lineage
+PASS  the grower is on record
+PASS  loan is closed out
+PASS  double return refused  (6008: "This loan is not open")
+PASS  borrow reopens after the return
+measure: member spent 6034720 lamports on join + 2 borrows + return (rent + fees)
+PASS  empty wallet gets a funding message
+```
+
+That measure didn't match the docs, so it got checked. LiteSVM's rent is not devnet's:
+
+```
+$ solana rent 82 --url devnet --lamports      1066800     # LiteSVM: 1461600
+$ solana rent 155 --url devnet --lamports     1437640     # LiteSVM: 1969680
+$ solana rent 280 --url devnet --lamports     2072640     # LiteSVM: 2839680
+1066800 + 2 × 1437640 + 2072640 + 4 × 5000 fees = 6034720  ✓ to the lamport
+```
+
+So one join + borrow + return costs a member **4,577,080 lamports of rent (0.00458 SOL)**, not 0.00629. `demo-seed` ran the whole loop with growers holding 0 SOL, so sponsorship (K22) works on real devnet.
+
+## Browser: the real UI, a real signature (`npm run e2e`)
+
+The layer unseen since audit 1. Chromium, the real Next.js app, the live program, and a Wallet Standard wallet injected into the page whose key stays in the test process. **Not Phantom, and not a stranger:** this does not count toward M11.
+
+```
+PASS  disconnected: borrow is held back with a reason
+PASS  empty wallet: offered free devnet SOL
+PASS  empty wallet: join explains funding, not a raw error
+PASS  faucet: answers either way  (rate-limited, showed the web faucet)
+PASS  wallet rejection: calm message, nothing sent
+PASS  join: member card appears
+PASS  borrow: return form appears
+PASS  borrow: the tin went from 40 to 30
+PASS  429 during the blocked borrow: retried, refusal still shown
+PASS  blocked borrow: refused in plain words  (Refused by the Solana program / You have an open loan. … / Nothing changed. Program error 6006.)
+PASS  blocked borrow: no signature asked
+PASS  note: counts bytes, not characters (K21)
+PASS  note too long: return is disabled
+PASS  no photo: inline error, nothing signed
+PASS  return: confirmed
+PASS  return: a child lot appears
+PASS  lineage: child, then parent, with the grower's note
+PASS  try-it checklist complete  (5/5)
+measure: demo path took 22 s, 3 signatures      # machine speed, not a stranger's
+PASS  fonts: the brand's fonts apply (K34)  (Fraunces / Inter)
+PASS  borrow reopens after return
+PASS  no console errors on the happy path
+PASS  RPC down: failure screen with a retry
+PASS  RPC back: recovers without a reload, loan and all
+PASS  a member is never told they aren't one while loading
+PASS  375 px: no horizontal scroll
+```
+
+**"No signature asked" has a mechanism and a limit.** Kit's planner simulates to estimate compute units before signing, so a refused borrow fails before the wallet appears. If a lagging node simulated from an old state, the wallet would be asked, and the program would still refuse on-chain, at the cost of a fee. So the screen says "Nothing changed", not "no fee".
+
+## Deep: mutation sweep
+
+`npm run program-mutants`, re-run today rather than quoting the 29 Oct result:
+
+```
+init: name check                 KILLED by tests::tests::init_library_rejects_empty_and_long_names
+add_lot: steward has_one         KILLED by tests::tests::add_lot_rejects_non_steward
+add_lot: variety check           KILLED by tests::tests::add_lot_variety_limit_is_in_bytes
+add_lot: note length             KILLED by tests::tests::note_limit_enforced_on_add_and_return
+add_lot: qty > 0                 KILLED by tests::tests::add_lot_rejects_zero_quantity
+borrow: gate                     KILLED by tests::tests::borrow_blocked_while_loan_open_and_reopens_after_return
+borrow: qty > 0                  KILLED by tests::tests::borrow_rejects_more_than_available_and_zero
+borrow: qty <= available         KILLED by tests::tests::borrow_rejects_more_than_available_and_zero, tests::tests::borr
+borrow: lot has_one library      KILLED by tests::tests::borrow_rejects_lot_from_another_library
+borrow: open_loans not set       KILLED by tests::tests::borrow_then_return_creates_child_lot, tests::tests::borrow_bloc
+return: has_one member           KILLED by tests::tests::return_by_non_borrower_rejected
+return: has_one lot              KILLED by tests::tests::return_claiming_wrong_parent_lot_rejected
+return: status Open              KILLED by tests::tests::double_return_rejected
+return: qty > 0                  KILLED by tests::tests::return_without_photo_or_seed_rejected
+return: photo check              KILLED by tests::tests::return_without_photo_or_seed_rejected
+return: note length              KILLED by tests::tests::return_without_photo_or_seed_rejected
+return: generation +1            KILLED by tests::tests::return_without_photo_or_seed_rejected
+return: gate not reopened        KILLED by tests::tests::return_without_photo_or_seed_rejected
+return: status not flipped       KILLED by tests::tests::double_return_rejected, tests::tests::borrow_then_return_create
+join: rent paid by wallet        KILLED by tests::tests::sponsor_pays_all_rent_so_member_pays_nothing
+borrow: rent paid by wallet      KILLED by tests::tests::sponsor_pays_all_rent_so_member_pays_nothing
+return_lot: rent paid by wallet  KILLED by tests::tests::sponsor_pays_all_rent_so_member_pays_nothing
+22/22 killed; survivors: []; skipped: []
+```
+
+## What held up
+
+| Check                           | Result                                                                       |
+| ------------------------------- | ---------------------------------------------------------------------------- |
+| `npm run program-test`          | 24 tests + Anchor's `test_id`, 0 warnings                                    |
+| `npm run ci`                    | Build, lint, Prettier pass. Lint warnings 3 → 0                              |
+| `cargo fmt --all -- --check`    | Clean: CI widened from one program to all (K17)                              |
+| `npm audit --omit=dev`          | 0 vulnerabilities                                                            |
+| Keypair                         | `target/deploy` = backup, matches `declare_id!`; `--strict` passed at deploy |
+| Light and dark, 1280 and 375 px | Viewed as screenshots; 3 fonts loaded                                        |
+
+## Still not seen
+
+- **A seed-library coordinator.** M10 = 0, on Day 19. The buyer has still never been seen.
+- **A stranger.** M11 = 0. There is nowhere to send one yet (K36), and step 1 needs the faucet (K35).
+- **A real wallet.** Phantom or Solflare signing in a real browser. The injected wallet proves the code path, not the wallet's own UI.
+- `cargo audit` against a fresh advisory DB (K24).
+- The cause of the one E2E timeout (K31).

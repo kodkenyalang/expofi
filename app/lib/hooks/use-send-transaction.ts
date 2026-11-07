@@ -33,7 +33,8 @@ export function useSendTransaction() {
       setIsSending(true);
       try {
         const result = await txClient.sendTransaction([...instructions]);
-        mutate((key: unknown) => Array.isArray(key) && key[0] === "balance");
+        // The chain is the source of truth: refetch every read after a confirm.
+        mutate(() => true);
         return result.context.signature;
       } finally {
         setIsSending(false);

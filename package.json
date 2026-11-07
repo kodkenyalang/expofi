@@ -26,18 +26,22 @@
     "node": ">=20.18"
   },
   "scripts": {
-    "anchor-build": "npm run anchor-check && cd anchor && anchor build --ignore-keys",
-    "anchor-check": "node scripts/check-anchor-version.mjs",
+    "anchor-build": "npm run anchor-check && node scripts/anchor.mjs build --ignore-keys",
+    "anchor-check": "node scripts/check-anchor-version.mjs && node scripts/program-keypair.mjs",
     "anchor-test": "npm run anchor-build && cd anchor && cargo test",
     "build": "next build",
     "ci": "npm run build && npm run lint && npm run format:check",
     "codama:js": "codama run js",
+    "demo-seed": "jiti scripts/devnet/seed-demo.ts",
     "dev": "next dev",
+    "devnet-smoke": "jiti scripts/devnet/smoke.ts",
+    "e2e": "jiti e2e/browser-flow.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint",
+    "program-deploy": "node scripts/program-keypair.mjs --strict --program=seed_library && cd anchor && solana program deploy target/deploy/seed_library.so --program-id target/deploy/seed_library-keypair.json --url devnet",
     "program-mutants": "python3 -I scripts/mutation-check.py anchor",
-    "program-test": "cd anchor && cargo build-sbf && cargo test",
+    "program-test": "node scripts/program-keypair.mjs && cd anchor && cargo build-sbf && cargo test",
     "setup": "npm run anchor-build && npm run codama:js",
     "start": "next start"
   },
@@ -60,6 +64,7 @@
   "devDependencies": {
     "@codama/nodes-from-anchor": "1.5.3",
     "@codama/renderers-js": "1.7.1",
+    "@solana-program/system": "^0.12.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
@@ -67,6 +72,8 @@
     "codama": "1.10.0",
     "eslint": "^9",
     "eslint-config-next": "^16.4.2",
+    "jiti": "^2.7.0",
+    "playwright-core": "^1.65.0",
     "prettier": "^3.6.2",
     "tailwindcss": "^4",
     "typescript": "^5"

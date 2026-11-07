@@ -1,29 +1,27 @@
 # Architecture
 
-## Template app (as found on 18 Oct 2026, still in place)
+## System
 
-The web app is still the `create-solana-dapp` **`kit/nextjs-anchor`** template, unchanged apart from the dependency fixes in [GENCHI_GENBUTSU.md](GENCHI_GENBUTSU.md). It is replaced in Cycle 2 (KAIZEN.md).
+The `create-solana-dapp` template's wallet layer stayed. Its vault program, UI, and client are gone. Pattern: **Next.js + Anchor dApp** (superstack architecture pattern 1).
 
 ```
-Browser (Next.js 16 / React 19)
+Browser (Next.js 16 / React 19), static page, no server, no secrets
   ├─ wallet-standard discovery   app/lib/wallet/{standard,context,signer}.ts
-  ├─ cluster switch              app/components/cluster-context.tsx
-  ├─ tx pipeline                 app/lib/send-transaction.ts  (build → sign → send → confirm)
-  ├─ error mapping               app/lib/errors.ts
-  └─ Codama client               app/generated/vault/   (from anchor/target/idl/vault.json)
+  ├─ cluster: devnet only        app/components/cluster-context.tsx
+  ├─ reads                       app/lib/hooks/use-library.ts   (SWR, refetched after every confirm)
+  ├─ writes                      app/lib/hooks/use-seed-actions.ts → use-send-transaction.ts
+  ├─ PDAs, limits, photo hash    app/lib/seed-library.ts
+  ├─ failures                    app/lib/errors.ts   (describeFailure, retryNetwork)
+  └─ Codama client               app/generated/seed_library/   (from anchor/target/idl/seed_library.json)
                 │
-                ▼  JSON-RPC (devnet)
-Solana program  anchor/programs/vault   F4jZpgbtTb6RWNWq6v35fUeiAsRJMrDczVPv9U23yXjB
-  ├─ deposit(amount)   SOL → PDA ["vault", signer]
-  └─ withdraw()        PDA → signer
-Tests           anchor/programs/vault/src/tests.rs   (LiteSVM, 4 tests)
+                ▼  JSON-RPC (public devnet, or NEXT_PUBLIC_EXPOFI_RPC_URL)
+Solana program  anchor/programs/seed_library   EqkKhhUF8yBnxHEXT2E8B4sdh36N4E4hHjqVRPbLzZby (devnet)
+Tests           src/tests.rs (LiteSVM) · npm run devnet-smoke (live) · npm run e2e (browser, live)
 ```
 
-Pattern: **Next.js + Anchor dApp** (superstack architecture pattern 1).
+## `seed_library` program (live on devnet: 5 of 7 instructions built)
 
-## `seed_library` program (in progress: 5 of 7 instructions built)
-
-`anchor/programs/seed_library/`. Program ID **`EqkKhhUF8yBnxHEXT2E8B4sdh36N4E4hHjqVRPbLzZby`** (not yet deployed). Layout follows AGENT.md (UNIX philosophy, 5S Seiton):
+`anchor/programs/seed_library/`. Program ID **`EqkKhhUF8yBnxHEXT2E8B4sdh36N4E4hHjqVRPbLzZby`**, deployed to devnet on 7 Nov 2026. Upgrade authority: the deploy wallet (`Fd3H…5RRG`). Layout follows AGENT.md (UNIX philosophy, 5S Seiton):
 
 ```
 programs/seed_library/src/
@@ -36,10 +34,10 @@ programs/seed_library/src/
 │   ├── add_lot.rs
 │   ├── borrow.rs
 │   └── return_lot.rs
-└── tests.rs            # LiteSVM, 22 tests (19/19 mutants killed)
+└── tests.rs            # LiteSVM, 24 tests (22/22 mutants killed)
 ```
 
-The program keypair lives in `anchor/target/deploy/seed_library-keypair.json`. That folder is gitignored, so **back the keypair up**: losing it means losing the program ID before the first deploy, and upgrade control after it.
+The program keypair lives in `anchor/target/deploy/seed_library-keypair.json`, which is gitignored. Since the deploy, upgrades need the **upgrade authority**, the deploy wallet, not this keypair. Keep the backup anyway: `scripts/program-keypair.mjs` restores it so that a clean build doesn't drift (K28).
 
 ### Accounts
 
@@ -57,7 +55,7 @@ Every seed includes the `library` key, directly or through the `member` PDA, so 
 | Instruction          | Signer  | Status     | Rule enforced on-chain (error)                                                                                                                                                                                                                                   |
 | -------------------- | ------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `init_library`       | steward | ✅ Day 2   | One library per steward key (PDA). Name 1–32 **bytes** (`InvalidName`). A second `init_library` fails (`Custom(0)`, account in use)                                                                                                                              |
-| `join`               | member  | ✅ Day 2   | One membership per wallet per library (PDA `init` fails on repeat). **Open join**: no steward approval yet                                                                                                                                                       |
+| `join`               | member  | ✅ Day 2   | One membership per wallet per library (PDA `init` fails on repeat). **Open join**: no steward approval yet. A separate `payer` signer pays the rent                                                                                                              |
 | `add_lot`            | steward | ✅ Day 2   | Only the steward (`NotSteward`). Variety 1–32 bytes, qty > 0, note ≤ 80 bytes. Root lot: `parent = None`, `generation = 0`                                                                                                                                       |
 | `borrow`             | member  | ✅ Day 3   | **Borrow gate: `open_loans == 0` (`BorrowBlocked`)**. Lot must belong to this library (`WrongLibrary`). `0 < qty ≤ qty_available` (`InvalidQuantity`, `InsufficientSeed`)                                                                                        |
 | `return_lot`         | member  | ✅ Day 3   | Loan must be the signer's (`NotBorrower`) and `Open` (`LoanNotOpen`). Parent must be the lot actually borrowed (`WrongLot`). qty > 0, photo hash non-zero (`MissingPhoto`). Creates child `Lot` with `parent = borrowed lot`, `generation + 1`; reopens the gate |
@@ -86,27 +84,31 @@ Framework codes the UI must also map: `3012 AccountNotInitialized` (wallet hasn'
 
 **Text limits are bytes**, because account space is bytes. 32 bytes is 32 Latin letters but only 10 CJK characters. The UI must count bytes (`new TextEncoder().encode(s).length`), not characters.
 
-### Costs and limits (measured 22 Oct, LiteSVM)
+### Costs and limits
 
-| Instruction    | Compute units | Account created | Rent paid by | Rent (lamports) |
-| -------------- | ------------- | --------------- | ------------ | --------------- |
-| `init_library` | 7,112         | Library, 89 B   | steward      | 1,510,320       |
-| `add_lot`      | 11,789        | Lot, 280 B      | steward      | 2,839,680       |
-| `join`         | 8,573         | Member, 82 B    | member       | 1,461,600       |
-| `borrow`       | 22,961        | Loan, 155 B     | member       | 1,969,680       |
-| `return_lot`   | 22,041        | Lot, 280 B      | member       | 2,839,680       |
+Compute units measured in LiteSVM on 22 Oct. **Rent measured on devnet on 7 Nov.** LiteSVM's rent is higher than devnet's, so its old lamport figures were wrong for real use (K38).
+
+| Instruction    | Compute units | Account created | Rent paid by   | Devnet rent (lamports) |
+| -------------- | ------------- | --------------- | -------------- | ---------------------- |
+| `init_library` | 7,112         | Library, 89 B   | steward        | 1,102,360              |
+| `add_lot`      | 11,789        | Lot, 280 B      | steward        | 2,072,640              |
+| `join`         | 8,573         | Member, 82 B    | `payer` signer | 1,066,800              |
+| `borrow`       | 22,961        | Loan, 155 B     | `payer` signer | 1,437,640              |
+| `return_lot`   | 22,041        | Lot, 280 B      | `payer` signer | 2,072,640              |
 
 - A test enforces a **40,000 CU budget** per instruction (max today 22,961).
-- **A member pays 0.00629 SOL** (join + borrow + return, plus ~5,000 lamports per transaction in fees). Nothing is ever closed, so the rent stays locked. Every `init` uses the member's own wallet as payer, so a society **can't sponsor** its members. Decide before the first deploy (K22): a separate `payer` signer, and closing `Loan` after return (lineage lives in `Lot.parent`, so a returned loan isn't needed for it).
-- Deploying the program needs about **2.56 SOL** (2 × 251,624 B rent for program data and buffer).
+- **A member pays 0.00458 SOL** on devnet for join + borrow + return, plus 5,000 lamports per transaction in fees. Nothing is ever closed, so the rent stays locked.
+- **A sponsor can pay all of it** (K22): `join`, `borrow`, and `return_lot` take a separate `payer` signer, and paying grants no rights. The member still signs, and is still the contributor on any child lot. `npm run demo-seed` runs this on devnet with growers holding 0 SOL. **The app doesn't sponsor yet:** it would need something to co-sign for a browser user (K35).
+- **Loans are not closed after return.** A loan is the member's receipt. Closing one later is a new instruction, not a migration.
+- **The first deploy cost 1.287 SOL**, nearly all of it the program's rent (252,792 B). The buffer is refunded.
 
 ### Concurrency
 
-Lot ids are a per-library sequence (`Library.lot_count`), so every `add_lot` and `return_lot` in a library writes the Library account and runs one at a time. If two clients build transactions from the same `lot_count`, the second fails with `2006 ConstraintSeeds`. The client must re-read the library and rebuild (`stale_lot_count_rejected_then_retry_succeeds`). At seed-library scale (a few returns a day) this is fine. A federation of busy libraries would need per-member lot ids instead.
+Lot ids are a per-library sequence (`Library.lot_count`), so every `add_lot` and `return_lot` in a library writes the Library account and runs one at a time. If two clients build transactions from the same `lot_count`, the second fails with `2006 ConstraintSeeds`. `returnSeed` re-reads the library and rebuilds (`stale_lot_count_rejected_then_retry_succeeds`). `borrow` does the same for `loan_count`, because a lagging RPC node can return the old value right after a borrow (K31). At seed-library scale (a few returns a day) this is fine. A federation of busy libraries would need per-member lot ids instead.
 
 ### Keypair
 
-`declare_id!` is `EqkK…LzZby`. The matching keypair is in `anchor/target/deploy/` (gitignored) and backed up to `~/.config/solana/expofi/seed_library-keypair.json` on the developer machine. A fresh clone's `cargo build-sbf` **generates a different keypair**, and tests still pass, so only `npm run anchor-check` notices (it warns). Never deploy from a machine where it warns.
+`declare_id!` is `EqkK…LzZby`. The matching keypair is in `anchor/target/deploy/` (gitignored) and backed up to `~/.config/solana/expofi/seed_library-keypair.json` on the developer machine. A fresh or cleaned `cargo build-sbf` **generates a different keypair**, and tests still pass. `scripts/program-keypair.mjs` runs before builds, restores the real one from the backup, and moves the wrong one aside (K28). `npm run program-deploy` refuses to run unless the keypair matches `declare_id!`.
 
 ### Data off-chain
 
@@ -114,8 +116,14 @@ Photos and long notes stay off-chain. Only a 32-byte hash and a short note (≤8
 
 ### Client
 
-- Regenerate with Codama: add the IDL to `codama.json` and output to `app/generated/seed_library/` (Cycle 2, needs Anchor 1.x for the IDL).
-- Screens: Library, Lot (with lineage), Borrow, Return, My loans. Every failure path has a screen (see AGENT.md, Distributed systems and Omotenashi).
+- **Generated:** `npm run codama:js` writes `app/generated/seed_library/` from the IDL. Output is deterministic and keeps Codama's own style (`app/generated` is prettier-ignored, K15).
+- **One screen, the demo path:** `library-view.tsx` holds the lots (`lot-card.tsx`), the family tree (`lineage.tsx`), your card (`member-panel.tsx`, `return-form.tsx`), and a checklist (`try-it.tsx`). Steward actions aren't in the UI: the demo library is seeded by script, so there's no screen the demo doesn't use.
+- **The borrow gate isn't hidden.** With an open loan, Borrow stays enabled and the program refuses it, because that refusal is the proof Solana is doing real work (PRODUCT.md, demo step 2). This is the one deliberate exception to AGENT.md's "disable the button when the program would reject it". Buttons are disabled only for what isn't a rule: no wallet, not joined, nothing left in the lot.
+- **The refusal normally arrives before the wallet opens**, because Kit's planner simulates to estimate compute units before signing. If a lagging node simulated from an old state, the wallet would be asked and the program would still refuse on-chain, at the cost of a fee. The screen therefore says "Nothing changed", not "no fee".
+- **Failures** go through `describeFailure` (`refused`, `cancelled`, `funds`, `network`, `expired`, `unknown`), each with its own title and next step. Refusals are clay, not red: nobody did anything wrong. `retryNetwork` retries 429s and dropped connections only, and a retry can't do anything twice, because a rebuilt transaction is refused on-chain.
+- **Not knowing isn't "no".** Membership has a separate checking state, so a member is never told they aren't one while their card loads (K33).
+- **Photos stay on the device.** Only the sha256 goes on-chain, and the screen says so. There's no photo host yet, so nobody else can see the photo behind a hash.
+- **Config:** `NEXT_PUBLIC_EXPOFI_STEWARD` selects the library. `NEXT_PUBLIC_EXPOFI_RPC_URL` replaces the rate-limited public endpoint.
 
 ### Tests
 
@@ -145,21 +153,38 @@ LiteSVM in `programs/seed_library/src/tests.rs`. Instructions are built with Anc
 | Pre-funded PDAs don't block init (lamport griefing) | `pre_funded_pdas_do_not_block_borrow_or_return`           | ✅     |
 | Borrowing the whole lot empties it                  | `borrowing_the_whole_lot_empties_it`                      | ✅     |
 | Every instruction under 40k CU                      | `every_instruction_within_compute_budget`                 | ✅     |
+| Sponsor pays all rent; member pays nothing          | `sponsor_pays_all_rent_so_member_pays_nothing`            | ✅     |
+| A sponsor can't act without the member's signature  | `sponsor_cannot_borrow_without_member_signature`          | ✅     |
 | Forgive unblocks borrowing                          | (with `forgive`)                                          | ⏳     |
 
-**Mutation check:** `npm run program-mutants` removes each of 19 rules in turn and requires a test to fail. 22 Oct: 15/19 before Day 4 (lineage, variety and note rules unguarded), **19/19 after**. It exits 1 on any survivor. Run it whenever a rule changes.
+**Mutation check:** `npm run program-mutants` removes each of 22 rules in turn and requires a test to fail, and exits 1 on any survivor. Run it whenever a rule changes. History: 15/19 before 22 Oct's Day 4, 19/19 after, 22/22 with the three `payer` rules.
+
+**Above the program:**
+
+| Layer | Command                | What it proves                                                                                                                                                                                                                                                               |
+| ----- | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Chain | `npm run devnet-smoke` | The rules on the live program, through the same client and error mapper as the app. Fresh library each run, about 0.02 SOL                                                                                                                                                   |
+| App   | `npm run e2e`          | The demo path through the real UI in Chromium on live devnet with an injected Wallet Standard wallet, plus chaos: wallet rejection, RPC down, injected 429s, empty wallet. Each run costs about 0.03 SOL. Not a real wallet and not a stranger: **doesn't count toward M11** |
+
+Neither runs in CI: both spend devnet SOL and depend on a rate-limited public endpoint.
 
 ## Decisions log
 
-| Date       | Decision                                                     | Why                                                                       |
-| ---------- | ------------------------------------------------------------ | ------------------------------------------------------------------------- |
-| 2026-10-18 | Build a custom program instead of integrating a protocol     | No existing protocol models loans that return offspring                   |
-| 2026-10-18 | Keep `@solana/kit` 6.x for now                               | Template default; upgrade to Kit 8 as one deliberate change               |
-| 2026-10-18 | Bump Next.js to 16.4.2                                       | Critical RCE advisory in 16.3.4                                           |
-| 2026-10-18 | No token, no collateral                                      | Product constraint (see PRODUCT.md)                                       |
-| 2026-10-21 | `return_lot` requires qty > 0 and a photo hash               | "Returned" must mean offspring exist; crop failure goes through `forgive` |
-| 2026-10-21 | `join` is open (no steward approval) for now                 | Unblocks the demo; revisit after coordinator interviews (K7)              |
-| 2026-10-21 | CI builds with `cargo build-sbf`, not `anchor build`         | No Anchor CLI in CI, and no way for CI to rewrite keys (K3)               |
-| 2026-10-22 | Error codes are append-only; `WrongLot` added as 6012        | Clients match on numbers; moving codes breaks them silently               |
-| 2026-10-22 | Text limits stay in bytes; messages and UI say so            | Account space is bytes; counting characters on-chain costs CU for nothing |
-| 2026-10-22 | Payer split and loan closing decided **before** deploy (K22) | Account layouts are cheap to change before deploy, expensive after        |
+| Date       | Decision                                                     | Why                                                                                                                                              |
+| ---------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 2026-10-18 | Build a custom program instead of integrating a protocol     | No existing protocol models loans that return offspring                                                                                          |
+| 2026-10-18 | Keep `@solana/kit` 6.x for now                               | Template default; upgrade to Kit 8 as one deliberate change                                                                                      |
+| 2026-10-18 | Bump Next.js to 16.4.2                                       | Critical RCE advisory in 16.3.4                                                                                                                  |
+| 2026-10-18 | No token, no collateral                                      | Product constraint (see PRODUCT.md)                                                                                                              |
+| 2026-10-21 | `return_lot` requires qty > 0 and a photo hash               | "Returned" must mean offspring exist; crop failure goes through `forgive`                                                                        |
+| 2026-10-21 | `join` is open (no steward approval) for now                 | Unblocks the demo; revisit after coordinator interviews (K7)                                                                                     |
+| 2026-10-21 | CI builds with `cargo build-sbf`, not `anchor build`         | No Anchor CLI in CI, and no way for CI to rewrite keys (K3)                                                                                      |
+| 2026-10-22 | Error codes are append-only; `WrongLot` added as 6012        | Clients match on numbers; moving codes breaks them silently                                                                                      |
+| 2026-10-22 | Text limits stay in bytes; messages and UI say so            | Account space is bytes; counting characters on-chain costs CU for nothing                                                                        |
+| 2026-10-22 | Payer split and loan closing decided **before** deploy (K22) | Account layouts are cheap to change before deploy, expensive after                                                                               |
+| 2026-11-07 | `payer` signer on `join`, `borrow`, `return_lot` (K22)       | A society can sponsor members. Paying grants no rights. Cheap before deploy, costly after                                                        |
+| 2026-11-07 | Loans stay open as receipts after return (K22)               | Closing one later is additive, and no coordinator has asked for it                                                                               |
+| 2026-11-07 | Deployed with 5 of 7 instructions                            | `forgive` waits on interviews; `Forgiven` is already in the layout, so it's an upgrade. Cost: a member whose crop fails stays blocked until then |
+| 2026-11-07 | Run the pinned Anchor binary, never avm's shim (K29)         | Second time the shim has changed the machine (K19). Its platform-tools map disagrees with `cargo-build-sbf`                                      |
+| 2026-11-07 | Borrow stays enabled during an open loan                     | The refusal is the demo's proof. The program is the guard either way                                                                             |
+| 2026-11-07 | One page; no steward screens; devnet only, no cluster switch | Muda: the program exists nowhere else, and the demo doesn't use them                                                                             |

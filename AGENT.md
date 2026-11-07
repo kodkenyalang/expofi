@@ -123,7 +123,7 @@ Each principle comes with the concrete rule it implies **in this repo**. If a ru
 Never reason about the system from memory, a README, or a template's claims. Go and look at the real thing, **at every layer** (toolchain → dependencies → program → generated client → UI → devnet → the actual seed librarian) and **across layers** (does the ID in `lib.rs` match `Anchor.toml`, the generated client, and what is deployed?).
 
 - Before a fix, reproduce it. Before a claim, run the command. Paste the output.
-- Cross-check program IDs in all four places: `lib.rs`, `Anchor.toml`, `app/generated/*/programs/*.ts`, `solana program show <id> --url devnet`.
+- Cross-check program IDs in all four places: `lib.rs`, `Anchor.toml`, `app/generated/*/programs/*.ts`, `solana program show <id> --url devnet`. Then check the code too: `solana program dump` must hash the same as the local `.so`.
 - The first audit is [docs/GENCHI_GENBUTSU.md](docs/GENCHI_GENBUTSU.md). It found three defects that every doc had missed. Re-run it at each checkpoint.
 - The last layer is people: talk to five seed-library volunteers before building a screen they did not ask for.
 
@@ -167,8 +167,8 @@ Cross-functional by default: product, program, client, and video are planned tog
 Find the one constraint, **exploit** it, **subordinate** everything else to it, **elevate** it, then repeat.
 
 - 18 Oct 2026: **toolchain** (Anchor CLI 0.30.1 vs program 1.x). Elevated 21 Oct: Anchor 1.1.2 installed, guarded, and pinned.
-- **Current constraint (21 Oct): access to real seed librarians** (0 of 5 interviews). The program is ahead of what we know about the buyer. Subordinate: don't build `forgive`, steward approval, or UI flows past what an interview has confirmed.
-- Next likely constraint: **the demo video**. Don't polish UI while the constraint is elsewhere.
+- 21 Oct: **access to real seed librarians** (0 of 5 interviews). Not elevated: still 0 on 7 Nov. Subordinate: don't build `forgive`, steward approval, or UI flows past what an interview has confirmed.
+- **Current constraint (7 Nov): a stranger can't reach or fund the flow.** The loop works on devnet, but there's no public URL (K36), and a fresh wallet needs the faucet (K35). Then the demo video, whose opening needs a real coordinator. Don't polish UI while the constraint is elsewhere.
 
 ### Poka-Yoke (mistake-proofing)
 
@@ -177,13 +177,13 @@ Make the wrong thing impossible, not just discouraged.
 - **On-chain:** every account constraint (`seeds`, `has_one`, `constraint =`) is a poka-yoke. The borrow gate is enforced in the program, never only in the UI.
 - **Typed client:** never hand-write instruction data. Use the Codama client in `app/generated/` and regenerate it, don't edit it.
 - **Toolchain:** scripts must fail loudly on the wrong Anchor version. Never "fix" a program ID by hand. A silent `declare_id!` rewrite is exactly the defect class this rule targets.
-- **UI:** disable the Borrow button when the program would reject it, but treat the program as the guard.
+- **UI:** disable a button when the program would reject it, but treat the program as the guard. One deliberate exception: Borrow stays enabled during an open loan, because that refusal is the demo's proof (ARCHITECTURE.md, Client).
 
 ### UNIX philosophy
 
 - One instruction does one thing: `borrow`, `return_lot`, `attest_germination`, `forgive`. No `do_everything(action: u8)`.
 - Compose through accounts and the IDL, which is our "text stream" between program, client, and indexer.
-- Small, sharp modules in `app/lib/`. Pipes over frameworks: `build → sign → send → confirm` stays a visible pipeline (`app/lib/send-transaction.ts`).
+- Small, sharp modules in `app/lib/`. Pipes over frameworks: `build → sign → send → confirm` stays a visible pipeline (`app/lib/hooks/use-seed-actions.ts`, `use-send-transaction.ts`).
 - Silence is golden: no console noise in success paths. Errors are human-readable (`app/lib/errors.ts`).
 
 ### Distributed systems
@@ -194,14 +194,14 @@ Solana is a distributed system and the browser is an unreliable client.
 - Blockhashes expire. Retries must rebuild and re-sign, and **instructions must be idempotent or reject duplicates** (a lot can only be returned once).
 - Know the commitment level you read at (`confirmed` for UI, `finalized` for anything that gates money or trust).
 - RPCs disagree for a few slots. Never assume read-your-own-write across two different endpoints.
-- Partial failure is normal: wallet rejected, RPC 429, faucet rate-limited (observed on devnet). Every one needs a screen.
+- Partial failure is normal: wallet rejected, RPC 429, faucet rate-limited (observed on devnet). Every one needs a screen. "Not loaded yet" is not the same as "doesn't exist" (K33).
 
 ### Chaos Engineering
 
 Inject failure on purpose before judges do it by accident.
 
 - In LiteSVM/Surfpool tests: duplicate return, return by a non-borrower, borrow with open loan, clock warp past the season deadline, account closed mid-flow.
-- In the client: kill the RPC, reject the signature, expire the blockhash, switch clusters mid-transaction.
+- In the client: kill the RPC, rate-limit it, reject the signature (all in `npm run e2e`), and expire the blockhash (not yet injected).
 - Each experiment has a hypothesis ("the borrow gate holds when…") and is kept as a regression test.
 
 ### Blast-radius minimisation
@@ -254,9 +254,9 @@ The allotment member is a guest. Anticipate the need before it is spoken.
 
 | S                          | Rule                                                                                                                       |
 | -------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| **Seiri** (sort)           | Delete template code (vault, "Anchor Vault" hero) once the seed-library equivalent lands.                                  |
+| **Seiri** (sort)           | Delete template code once the seed-library equivalent lands. Done 7 Nov: no vault, hero, grid, or cluster switch left.     |
 | **Seiton** (set in order)  | One instruction per file in `programs/*/src/instructions/`. Docs live in `docs/`.                                          |
-| **Seiso** (shine)          | Zero lint warnings, zero compiler warnings. 3 + 3 exist today, so pay them down.                                           |
+| **Seiso** (shine)          | Zero lint warnings, zero compiler warnings. Reached 7 Nov: keep it there.                                                  |
 | **Seiketsu** (standardize) | `npm run ci` and `npm run program-test` are the standard, enforced in CI. Prettier formats everything, including Markdown. |
 | **Shitsuke** (sustain)     | Re-run the genchi genbutsu audit each checkpoint. Keep this file current.                                                  |
 

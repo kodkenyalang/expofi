@@ -46,14 +46,29 @@ export function WalletButton() {
           onClick={() => (isOpen ? close() : open())}
           className="cursor-pointer rounded-lg bg-primary px-4 py-2 text-xs font-medium text-primary-foreground shadow-xs transition hover:bg-primary/90"
         >
-          Connect Wallet
+          Connect wallet
         </button>
 
         {isOpen && (
           <div className="absolute right-0 top-full z-50 mt-2 w-64 rounded-xl border border-border-low bg-card p-3 shadow-lg">
-            <p className="mb-2 text-xs font-medium text-muted">
-              Choose a wallet
-            </p>
+            {connectors.length === 0 ? (
+              <p className="text-sm">
+                No Solana wallet found in this browser.{" "}
+                <a
+                  href="https://phantom.com/download"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline underline-offset-2"
+                >
+                  Get Phantom
+                </a>
+                , then reload this page.
+              </p>
+            ) : (
+              <p className="mb-2 text-xs font-medium text-muted">
+                Choose a wallet
+              </p>
+            )}
             <div className="space-y-1">
               {connectors.map((connector) => (
                 <button
@@ -70,6 +85,8 @@ export function WalletButton() {
                   className="flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition hover:bg-cream disabled:opacity-50 disabled:pointer-events-none"
                 >
                   {connector.icon && (
+                    // A wallet's icon is a data URI it supplies, so next/image can't help.
+                    // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={connector.icon}
                       alt=""

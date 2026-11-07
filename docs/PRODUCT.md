@@ -17,7 +17,7 @@ A seed library ledger where every loan expects **offspring** (saved seed and a g
 1. Steward lists a **lot** (variety, quantity, where it came from).
 2. Member **borrows** some or all of it.
 3. Months later, member **returns** saved seed: quantity, a photo, a germination note. The return becomes a **child lot** whose parent is the borrowed lot.
-4. Until that loan is returned (or the steward forgives it), the member **can't borrow again**.
+4. Until that loan is returned, the member **can't borrow again**. A steward `forgive` is designed but not built (it waits on interviews), so today a member whose crop fails stays blocked.
 5. Anyone can follow a lot's **lineage**: this tomato descends from that tomato, grown in this library, for five seasons.
 
 ## Why this is new
@@ -33,7 +33,7 @@ Acceptable proof (from the hackathon brief): a state change the user can see bec
 ## Demo script (2–4 minutes)
 
 1. **Person and problem** (20 s): coordinator with the paper ledger; half the beans never came back.
-2. **Failure first** (30 s): Sam has an open loan and taps Borrow. The program rejects it with a plain-language error.
+2. **Failure first** (30 s): Sam has an open loan and taps Borrow. The program rejects it with a plain-language error. The button stays enabled on purpose, so this happens on camera.
 3. **Success** (60 s): Sam returns saved seed with a photo. A child lot appears. Sam's next borrow succeeds.
 4. **Lineage** (30 s): tap a lot and see its ancestry back three generations.
 5. **One sentence on Solana** (10 s).
@@ -45,7 +45,7 @@ Time is compressed in the demo, and the video **says so**.
 
 - **No token. No yield. No collateral.** The token version of loyalty and DAOs died in the Graveyard; the job survived.
 - **No public "bad borrower" list.** A blocked borrow is visible only to the member and their steward.
-- **Crop failure is not punished.** A germination note saying "0/20 came up" is valuable data. Only _non-return_ blocks borrowing.
+- **Crop failure is not punished.** A germination note saying "0/20 came up" is valuable data. Only _non-return_ blocks borrowing. **Not true yet for a crop that yields no seed at all:** that needs `forgive`. Don't claim it on camera until it's built.
 - Not a carbon credit, not a marketplace.
 
 ## Kill criteria
@@ -58,5 +58,5 @@ Time is compressed in the demo, and the video **says so**.
 
 - Who signs the return: the borrower alone, or the borrower plus a steward attestation?
 - Should the steward be a single key or a Squads multisig for larger societies?
-- Wallet onboarding for non-crypto gardeners: embedded wallet (e.g. Privy) vs wallet-standard only?
+- Wallet onboarding for non-crypto gardeners: embedded wallet (e.g. Privy) vs wallet-standard only? A fresh wallet has no SOL, and the faucet rate-limits: this is the first thing a stranger will hit (K35). The program can already take a sponsor (K22).
 - Photo storage: IPFS/Arweave vs the society's own host (only the hash goes on-chain either way).

@@ -52,10 +52,9 @@ jobs:
         if: steps.solana-cache.outputs.cache-hit != 'true'
         run: sh -c "$(curl -sSfL https://release.anza.xyz/v${SOLANA_VERSION}/install)"
       - run: echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
-      # Template vault is not rustfmt-clean; it is deleted in Cycle 2 (KAIZEN.md)
-      - name: rustfmt (seed_library)
+      - name: rustfmt
         working-directory: anchor
-        run: cargo fmt -p seed_library -- --check
+        run: cargo fmt --all -- --check
       # build-sbf instead of `anchor build`: no Anchor CLI needed, and no
       # chance of keys being rewritten (K3)
       - name: Build programs
