@@ -1,53 +1,29 @@
 "use client";
 
-import {
-  createContext,
-  useContext,
-  useState,
-  useCallback,
-  type ReactNode,
-} from "react";
+import { createContext, useContext, useCallback, type ReactNode } from "react";
 import type { ClusterMoniker } from "../lib/solana-client";
-import { CLUSTERS } from "../lib/solana-client";
 import { getExplorerUrl } from "../lib/explorer";
 
 type ClusterContextValue = {
   cluster: ClusterMoniker;
-  setCluster: (cluster: ClusterMoniker) => void;
   getExplorerUrl: (path: string) => string;
 };
 
 const ClusterContext = createContext<ClusterContextValue | null>(null);
 
-const STORAGE_KEY = "solana-cluster";
-function getInitialCluster(): ClusterMoniker {
-  if (typeof window === "undefined") return "devnet";
-  const stored = localStorage.getItem(STORAGE_KEY);
-  if (stored && CLUSTERS.includes(stored as ClusterMoniker)) {
-    return stored as ClusterMoniker;
-  }
-  return "devnet";
-}
-
-export { CLUSTERS };
+// The seed_library program is deployed to devnet only, so there is nothing to
+// switch to (AGENT.md: blast-radius, devnet only until after the hackathon).
+const CLUSTER: ClusterMoniker = "devnet";
 
 export function ClusterProvider({ children }: { children: ReactNode }) {
-  const [cluster, setClusterState] =
-    useState<ClusterMoniker>(getInitialCluster);
-
-  const setCluster = useCallback((c: ClusterMoniker) => {
-    setClusterState(c);
-    localStorage.setItem(STORAGE_KEY, c);
-  }, []);
-
   const explorerUrl = useCallback(
-    (path: string) => getExplorerUrl(path, cluster),
-    [cluster]
+    (path: string) => getExplorerUrl(path, CLUSTER),
+    []
   );
 
   return (
     <ClusterContext.Provider
-      value={{ cluster, setCluster, getExplorerUrl: explorerUrl }}
+      value={{ cluster: CLUSTER, getExplorerUrl: explorerUrl }}
     >
       {children}
     </ClusterContext.Provider>

@@ -3,54 +3,61 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  --background: #ffffff;
-  --foreground: #0a0a0a;
-  --primary: #171717;
-  --primary-foreground: #fafafa;
-  --muted: #737373;
-  --muted-foreground: #737373;
-  --card: #ffffff;
-  --card-foreground: #0a0a0a;
-  --popover: #ffffff;
-  --popover-foreground: #0a0a0a;
-  --border: #e5e5e5;
-  --border-low: #f5f5f5;
-  --input: #e5e5e5;
-  --accent: #f5f5f5;
-  --accent-foreground: #171717;
-  --cream: #f5f5f5;
-  --destructive: #ef4444;
-  --destructive-foreground: #ef4444;
-  --ring: #a3a3a3;
+  --background: #fbf8f1;
+  --foreground: #24201a;
+  --primary: #2f5d3a;
+  --primary-foreground: #fbf8f1;
+  --muted: #655c50;
+  --muted-foreground: #655c50;
+  --card: #fffdf8;
+  --card-foreground: #24201a;
+  --popover: #fffdf8;
+  --popover-foreground: #24201a;
+  --border: #e4dccb;
+  --border-low: #efe9dc;
+  --input: #cfc5b0;
+  --accent: #f3eee2;
+  --accent-foreground: #24201a;
+  --cream: #f3eee2;
+  --destructive: #a8321a;
+  --destructive-foreground: #a8321a;
+  --ring: #2f5d3a;
   --radius: 0.625rem;
-  --secondary: #f5f5f5;
-  --secondary-foreground: #171717;
+  --secondary: #f3eee2;
+  --secondary-foreground: #24201a;
+  --leaf: #3f7d4e;
+  --clay: #a34e1a;
+  --clay-soft: #f8ead9;
   --font-sans: var(--font-inter), system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --font-display: var(--font-fraunces), Georgia, serif;
 }
 
 .dark {
-  --background: #0a0a0a;
-  --foreground: #fafafa;
-  --primary: #fafafa;
-  --primary-foreground: #171717;
-  --muted: #a3a3a3;
-  --muted-foreground: #737373;
-  --card: #171717;
-  --card-foreground: #fafafa;
-  --popover: #171717;
-  --popover-foreground: #fafafa;
-  --border: #262626;
-  --border-low: rgba(38, 38, 38, 0.5);
-  --input: #262626;
-  --accent: #262626;
-  --accent-foreground: #fafafa;
-  --cream: #262626;
-  --destructive: #ef4444;
-  --destructive-foreground: #ef4444;
-  --ring: #525252;
-  --secondary: #262626;
-  --secondary-foreground: #fafafa;
+  --background: #171510;
+  --foreground: #f1ece0;
+  --primary: #9ad1a7;
+  --primary-foreground: #14231a;
+  --muted: #aea493;
+  --muted-foreground: #aea493;
+  --card: #211e17;
+  --card-foreground: #f1ece0;
+  --popover: #211e17;
+  --popover-foreground: #f1ece0;
+  --border: #3a352a;
+  --border-low: #2c2820;
+  --input: #4a4436;
+  --accent: #2c2820;
+  --accent-foreground: #f1ece0;
+  --cream: #2c2820;
+  --destructive: #f0795c;
+  --destructive-foreground: #f0795c;
+  --ring: #9ad1a7;
+  --secondary: #2c2820;
+  --secondary-foreground: #f1ece0;
+  --leaf: #8cc79a;
+  --clay: #e39a63;
+  --clay-soft: #33261a;
 }
 
 @theme inline {
@@ -75,8 +82,12 @@
   --color-ring: var(--ring);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
+  --color-leaf: var(--leaf);
+  --color-clay: var(--clay);
+  --color-clay-soft: var(--clay-soft);
   --font-sans: var(--font-sans);
   --font-mono: var(--font-mono);
+  --font-display: var(--font-display);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
@@ -90,5 +101,10 @@
   body {
     @apply bg-background text-foreground antialiased;
     font-family: var(--font-sans);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
   }
 }
