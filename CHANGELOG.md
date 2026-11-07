@@ -23,7 +23,7 @@ gh run list --json headSha,databaseId,conclusion,createdAt
 
 ## [Unreleased]
 
-Written 2026-11-07. A file can't record the hash or push time of the commit that adds it, so this entry gets its timestamps in the next update. Plan days 7–9.
+Written 2026-11-07. A file can't record the hash or push time of the commit that adds it, so this entry gets its timestamps in the next update. Plan days 7–9. On branch `kaizen-days-7-9`, [PR #1](https://github.com/kodkenyalang/expofi/pull/1), not on `main` yet. **CI:** [run 42351004217](https://github.com/kodkenyalang/expofi/actions/runs/42351004217) ✅ success on `08d4ae9`.
 
 ### Added
 
