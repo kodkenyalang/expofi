@@ -24,17 +24,24 @@ const WS_URLS: Record<ClusterMoniker, string> = {
   localnet: "ws://localhost:8900",
 };
 
+// The public devnet RPC rate-limits hard (K30). Point a deployment at its own
+// endpoint with NEXT_PUBLIC_EXPOFI_RPC_URL.
+const RPC_OVERRIDE = process.env.NEXT_PUBLIC_EXPOFI_RPC_URL;
+
 export function getClusterUrl(cluster: ClusterMoniker) {
-  return CLUSTER_URLS[cluster];
+  return RPC_OVERRIDE ?? CLUSTER_URLS[cluster];
 }
 
 export function getClusterWsConfig(cluster: ClusterMoniker) {
+  if (RPC_OVERRIDE) return { url: RPC_OVERRIDE.replace(/^http/, "ws") };
   return cluster === "localnet" ? { url: WS_URLS[cluster] } : undefined;
 }
 
 export function createSolanaClient(cluster: ClusterMoniker) {
-  const url = CLUSTER_URLS[cluster];
-  const wsUrl = WS_URLS[cluster];
+  const url = getClusterUrl(cluster);
+  const wsUrl = RPC_OVERRIDE
+    ? RPC_OVERRIDE.replace(/^http/, "ws")
+    : WS_URLS[cluster];
   return createEmptyClient()
     .use(rpc(url, { url: wsUrl }))
     .use(rpcAirdrop());
