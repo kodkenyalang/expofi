@@ -1,11 +1,10 @@
 # Anchor workspace
 
-Two programs:
+One program:
 
-| Program        | ID                                             | Status                                                                                |
-| -------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------- |
-| `seed_library` | `EqkKhhUF8yBnxHEXT2E8B4sdh36N4E4hHjqVRPbLzZby` | ExpoFi. 5 of 7 instructions, 22 LiteSVM tests, 19/19 mutants killed. Not deployed yet |
-| `vault`        | `F4jZpgbtTb6RWNWq6v35fUeiAsRJMrDczVPv9U23yXjB` | Template from `create-solana-dapp`. Removed once the new UI lands (Cycle 2)           |
+| Program        | ID                                             | Status                                                                                  |
+| -------------- | ---------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `seed_library` | `EqkKhhUF8yBnxHEXT2E8B4sdh36N4E4hHjqVRPbLzZby` | ExpoFi. **Live on devnet.** 5 of 7 instructions, 24 LiteSVM tests, 22/22 mutants killed |
 
 Design, accounts, rules, and the test matrix: [../docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md).
 
@@ -14,95 +13,32 @@ Design, accounts, rules, and the test matrix: [../docs/ARCHITECTURE.md](../docs/
 From the repo root:
 
 ```bash
-npm run program-test   # cargo build-sbf + cargo test for all programs. No Anchor CLI needed
-npm run anchor-build   # anchor build (IDL too). Runs the version guard first
+npm run program-test     # cargo build-sbf + cargo test. No Anchor CLI needed
+npm run anchor-build     # version guard, then anchor build (IDL too)
+npm run program-mutants  # when you change an on-chain rule: every mutant must be killed
 ```
 
-Or by hand:
+> **Toolchain:** this workspace needs **Anchor CLI 1.1.x** (`anchor-lang = "1.1.2"`). Don't call `anchor` from `PATH`: that is avm's shim, which can change the machine's Solana CLI and platform-tools when it runs (K19, K29). `scripts/anchor.mjs` runs the pinned binary from `~/.avm/bin/` directly, and every npm script goes through it.
+
+> **Keypair:** `target/deploy/seed_library-keypair.json` is the program's identity and is **gitignored**. It is backed up to `~/.config/solana/expofi/seed_library-keypair.json` (mode 600) on the main dev machine. A fresh or cleaned `cargo build-sbf` generates a _different_ keypair, and the tests still pass. `scripts/program-keypair.mjs` restores the real one from the backup, and moves the wrong one aside, before every build.
+
+## Deploy
 
 ```bash
-cd anchor
-cargo build-sbf        # builds every program into target/deploy/*.so
-cargo test             # LiteSVM tests load those .so files
+npm run anchor-build     # the .so and IDL
+npm run program-deploy   # refuses unless the keypair matches declare_id!
+npm run codama:js        # only if the IDL changed
 ```
 
-> **Toolchain:** this workspace needs **Anchor CLI 1.1.x** (`anchor-lang = "1.1.2"`). On Anchor 0.30.x, `anchor build` silently rewrites `declare_id!` and `Anchor.toml` to a fresh local key. `npm run anchor-check` (run automatically by `anchor-build` and `setup`) stops that from happening.
+The first deploy (7 Nov 2026) cost **1.287 SOL**, and the upgrade authority is the deploy wallet. An upgrade temporarily needs about the same again for its buffer, and returns it.
 
-> **Keypair:** `target/deploy/seed_library-keypair.json` is the `seed_library` program's identity and is **gitignored**. On the main dev machine it is backed up to `~/.config/solana/expofi/seed_library-keypair.json` (mode 600). A fresh clone's `cargo build-sbf` generates a _different_ keypair and the tests still pass, so only `npm run anchor-check` notices (it warns). Never deploy from a machine where it warns; copy the real keypair in over a secure channel first.
+Then check all four places agree (AGENT.md): `lib.rs`, `Anchor.toml`, `app/generated/seed_library/programs/seedLibrary.ts`, and `solana program show <id> --url devnet`.
 
-## Template vault program
-
-A simple SOL vault program built with [Anchor](https://www.anchor-lang.com/).
-
-## Pre-deployed Program
-
-The vault program is deployed on **devnet** at:
-
-```
-F4jZpgbtTb6RWNWq6v35fUeiAsRJMrDczVPv9U23yXjB
-```
-
-You can interact with it immediately by connecting your wallet to devnet.
-
-## Deploying Your Own Program
-
-To deploy your own version of the program:
-
-### 1. Generate a new program keypair
+## Devnet data
 
 ```bash
-cd anchor
-solana-keygen new -o target/deploy/vault-keypair.json
+npm run demo-seed      # the demo library: 3 root lots, plus a bean lot grown for 3 generations
+npm run devnet-smoke   # the rules against the live program, in a fresh library
 ```
 
-### 2. Get the new program ID
-
-```bash
-solana address -k target/deploy/vault-keypair.json
-```
-
-### 3. Update the program ID
-
-Update the program ID in these files:
-
-- `anchor/Anchor.toml` - Update `vault = "..."` under `[programs.devnet]`
-- `anchor/programs/vault/src/lib.rs` - Update `declare_id!("...")`
-
-### 4. Build and deploy
-
-```bash
-# Build the program
-anchor build
-
-# Get devnet SOL for deployment (~2 SOL needed)
-solana airdrop 2 --url devnet
-
-# Deploy to devnet
-anchor deploy --provider.cluster devnet
-```
-
-### 5. Regenerate the TypeScript client
-
-```bash
-cd ..
-npm run codama:js
-```
-
-This updates the generated client code in `app/generated/vault/` with your new program ID.
-
-## Program Overview
-
-The vault program allows users to:
-
-- **Deposit**: Send SOL to a personal vault PDA (Program Derived Address)
-- **Withdraw**: Retrieve all SOL from your vault
-
-Each user gets their own vault derived from their wallet address.
-
-## Testing
-
-Run the Anchor tests:
-
-```bash
-anchor test --skip-deploy
-```
+`demo-seed` is idempotent and resumable. Its growers are throwaway keypairs with no SOL: the steward pays through the `payer` signer (K22).

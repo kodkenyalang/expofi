@@ -9,7 +9,7 @@ mod tests {
     };
     use litesvm::{types::TransactionResult, LiteSVM};
     use solana_sdk::{
-        instruction::{Instruction, InstructionError},
+        instruction::{AccountMeta, Instruction, InstructionError},
         pubkey::Pubkey,
         signature::Keypair,
         signer::Signer,
@@ -117,19 +117,23 @@ mod tests {
         send(svm, ix, steward)
     }
 
-    fn join(svm: &mut LiteSVM, library: &Pubkey, wallet: &Keypair) -> TransactionResult {
-        let ix = Instruction {
+    fn join_ix(library: &Pubkey, wallet: &Pubkey) -> Instruction {
+        Instruction {
             program_id: PROGRAM_ID,
             accounts: crate::accounts::Join {
-                wallet: wallet.pubkey(),
+                wallet: *wallet,
+                payer: *wallet,
                 library: *library,
-                member: member_pda(library, &wallet.pubkey()),
+                member: member_pda(library, wallet),
                 system_program: system_program::ID,
             }
             .to_account_metas(None),
             data: crate::instruction::Join {}.data(),
-        };
-        send(svm, ix, wallet)
+        }
+    }
+
+    fn join(svm: &mut LiteSVM, library: &Pubkey, wallet: &Keypair) -> TransactionResult {
+        send(svm, join_ix(library, &wallet.pubkey()), wallet)
     }
 
     fn add_lot_ix(
@@ -178,19 +182,20 @@ mod tests {
         send(svm, ix, signer)
     }
 
-    fn borrow(
-        svm: &mut LiteSVM,
-        wallet: &Keypair,
+    fn borrow_ix(
+        svm: &LiteSVM,
+        wallet: &Pubkey,
         library: &Pubkey,
         lot: &Pubkey,
         qty: u32,
-    ) -> TransactionResult {
-        let member = member_pda(library, &wallet.pubkey());
+    ) -> Instruction {
+        let member = member_pda(library, wallet);
         let index = fetch::<Member>(svm, &member).loan_count;
-        let ix = Instruction {
+        Instruction {
             program_id: PROGRAM_ID,
             accounts: crate::accounts::Borrow {
-                wallet: wallet.pubkey(),
+                wallet: *wallet,
+                payer: *wallet,
                 library: *library,
                 member,
                 lot: *lot,
@@ -199,7 +204,17 @@ mod tests {
             }
             .to_account_metas(None),
             data: crate::instruction::Borrow { qty }.data(),
-        };
+        }
+    }
+
+    fn borrow(
+        svm: &mut LiteSVM,
+        wallet: &Keypair,
+        library: &Pubkey,
+        lot: &Pubkey,
+        qty: u32,
+    ) -> TransactionResult {
+        let ix = borrow_ix(svm, &wallet.pubkey(), library, lot, qty);
         send(svm, ix, wallet)
     }
 
@@ -218,6 +233,7 @@ mod tests {
             program_id: PROGRAM_ID,
             accounts: crate::accounts::ReturnLot {
                 wallet: *wallet,
+                payer: *wallet,
                 library: *library,
                 member: member_pda(library, wallet),
                 loan: *loan,
@@ -540,6 +556,8 @@ mod tests {
     const ANCHOR_CONSTRAINT_SEEDS: u32 = 2006;
     /// Anchor's AccountNotInitialized.
     const ANCHOR_ACCOUNT_NOT_INITIALIZED: u32 = 3012;
+    /// Anchor's AccountNotSigner.
+    const ANCHOR_ACCOUNT_NOT_SIGNER: u32 = 3010;
     /// System program "account already in use" (create_account on an existing account).
     const SYSTEM_ACCOUNT_IN_USE: u32 = 0;
     /// Measured max on 22 Oct was 22,961 CU (borrow). Budget leaves ~1.7x headroom.
@@ -661,6 +679,7 @@ mod tests {
             program_id: PROGRAM_ID,
             accounts: crate::accounts::Borrow {
                 wallet: stranger.pubkey(),
+                payer: stranger.pubkey(),
                 library: w.library,
                 member,
                 lot: w.root_lot,
@@ -793,5 +812,88 @@ mod tests {
             assert!(result.is_ok(), "{name} failed");
             assert!(cu < CU_BUDGET, "{name} used {cu} CU, budget {CU_BUDGET}");
         }
+    }
+
+    // ---------- Day 7: sponsored rent (K22) ----------
+
+    /// `payer` is the second account of join, borrow and return_lot. Swap in a
+    /// sponsor who pays the rent (and, here, the fee) instead of the member.
+    fn paid_by(mut ix: Instruction, sponsor: &Pubkey) -> Instruction {
+        ix.accounts[1] = AccountMeta::new(*sponsor, true);
+        ix
+    }
+
+    fn send_sponsored(
+        svm: &mut LiteSVM,
+        ix: Instruction,
+        member: &Keypair,
+        sponsor: &Keypair,
+    ) -> TransactionResult {
+        let tx = Transaction::new_signed_with_payer(
+            &[ix],
+            Some(&sponsor.pubkey()),
+            &[sponsor, member],
+            svm.latest_blockhash(),
+        );
+        let result = svm.send_transaction(tx);
+        svm.expire_blockhash();
+        result
+    }
+
+    fn lamports(svm: &LiteSVM, address: &Pubkey) -> u64 {
+        svm.get_account(address).map_or(0, |a| a.lamports)
+    }
+
+    /// M14: a sponsored member pays nothing for a full join → borrow → return
+    /// cycle. Unsponsored, the same cycle costs 6,285,960 lamports of rent.
+    #[test]
+    fn sponsor_pays_all_rent_so_member_pays_nothing() {
+        let mut w = world();
+        let sponsor = w.steward.insecure_clone();
+        let robin = funded(&mut w.svm);
+        let before = lamports(&w.svm, &robin.pubkey());
+
+        let ix = paid_by(join_ix(&w.library, &robin.pubkey()), &sponsor.pubkey());
+        send_sponsored(&mut w.svm, ix, &robin, &sponsor).unwrap();
+        let ix = borrow_ix(&w.svm, &robin.pubkey(), &w.library, &w.root_lot, 10);
+        send_sponsored(&mut w.svm, paid_by(ix, &sponsor.pubkey()), &robin, &sponsor).unwrap();
+
+        let loan = loan_pda(&member_pda(&w.library, &robin.pubkey()), 0);
+        let child_id = fetch::<Library>(&w.svm, &w.library).lot_count;
+        let ix = return_lot_ix(
+            &robin.pubkey(),
+            &w.library,
+            &loan,
+            &w.root_lot,
+            child_id,
+            30,
+            PHOTO,
+            "Sponsored by the society",
+        );
+        send_sponsored(&mut w.svm, paid_by(ix, &sponsor.pubkey()), &robin, &sponsor).unwrap();
+
+        assert_eq!(lamports(&w.svm, &robin.pubkey()), before);
+        let child: Lot = fetch(&w.svm, &lot_pda(&w.library, child_id));
+        // Paying the rent grants nothing: the grower is still the contributor.
+        assert_eq!(child.contributor, robin.pubkey());
+        assert_eq!(fetch::<Loan>(&w.svm, &loan).status, LoanStatus::Returned);
+    }
+
+    /// A sponsor can pay, but can't act for the member: the member still signs.
+    #[test]
+    fn sponsor_cannot_borrow_without_member_signature() {
+        let mut w = world();
+        let sponsor = w.steward.insecure_clone();
+        let sam = w.sam.pubkey();
+        let mut ix = paid_by(
+            borrow_ix(&w.svm, &sam, &w.library, &w.root_lot, 10),
+            &sponsor.pubkey(),
+        );
+        ix.accounts[0] = AccountMeta::new_readonly(sam, false);
+        assert_code(send(&mut w.svm, ix, &sponsor), ANCHOR_ACCOUNT_NOT_SIGNER);
+        assert_eq!(
+            fetch::<Member>(&w.svm, &member_pda(&w.library, &sam)).open_loans,
+            0
+        );
     }
 }

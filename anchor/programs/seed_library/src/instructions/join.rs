@@ -5,13 +5,16 @@ use crate::state::{Library, Member};
 
 #[derive(Accounts)]
 pub struct Join<'info> {
-    #[account(mut)]
     pub wallet: Signer<'info>,
+    /// Pays the rent: the member, or a sponsor such as the society
+    /// (KAIZEN.md K22). Paying someone's rent grants no rights over the account.
+    #[account(mut)]
+    pub payer: Signer<'info>,
     #[account(mut)]
     pub library: Account<'info, Library>,
     #[account(
         init,
-        payer = wallet,
+        payer = payer,
         space = 8 + Member::INIT_SPACE,
         seeds = [b"member", library.key().as_ref(), wallet.key().as_ref()],
         bump,

@@ -53,6 +53,12 @@ MUTANTS = [
      "self.member.open_loans = 0;", ""),
     ("return: status not flipped", "return_lot.rs",
      "self.loan.status = LoanStatus::Returned;", ""),
+] + [
+    # K22: the sponsor's payer signer silently reverted to the member's wallet.
+    (f"{ix}: rent paid by wallet", f"{ix}.rs",
+     ["    pub wallet: Signer<'info>,\n    /// Pays the rent", "payer = payer,"],
+     ["    #[account(mut)]\n    pub wallet: Signer<'info>,\n    /// Pays the rent", "payer = wallet,"])
+    for ix in ("join", "borrow", "return_lot")
 ]
 
 
@@ -62,13 +68,18 @@ def run(cmd):
 
 results = []
 for name, fname, old, new in MUTANTS:
+    # A mutant is one edit, or a list of edits applied together.
+    olds, news = (old, new) if isinstance(old, list) else ([old], [new])
     path = src / fname
     original = path.read_text()
-    if original.count(old) != 1:
+    if any(original.count(o) != 1 for o in olds):
         results.append((name, "SKIPPED (pattern not found once)"))
         continue
     try:
-        path.write_text(original.replace(old, new))
+        mutated = original
+        for o, n in zip(olds, news):
+            mutated = mutated.replace(o, n)
+        path.write_text(mutated)
         b = run(["cargo", "build-sbf", "--manifest-path", "programs/seed_library/Cargo.toml"])
         if b.returncode != 0:
             results.append((name, "KILLED (does not compile)"))
